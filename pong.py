@@ -293,7 +293,8 @@ class Tools():
         bvy = state[5]
         return np.array([p2_y, p1_y, getattr(Pong_env, 'screen_width')/800 - bx, by, -bvx, bvy])
 class DQN(nn.Module):
-    def __init__(self, input_size = 6, output_size = 3):
+    def __init__(self, input_size = 6, output_size = 3,
+            device=torch.device('cpu')):
         super(DQN, self).__init__()
 
         self.fc1 = nn.Linear(input_size, 100)
@@ -301,7 +302,7 @@ class DQN(nn.Module):
         self.fc3 = nn.Linear(100, 100)
         self.out = nn.Linear(100, output_size)
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = device
         self.to(self.device)
 
     def forward(self, t):

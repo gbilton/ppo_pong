@@ -6,12 +6,14 @@ from pong import *
 if __name__ == '__main__':
     env = make('Pong-v0')
 
-    p = DQN()
-    p.load_state_dict(torch.load('tmp/dqn/model100x3.pth'))
+    device = torch.device('cuda')
+
+    p = DQN(device=device)
+    p.load_state_dict(torch.load('tmp/dqn/model100x3.pth', map_location=device))
     p.eval()
 
-    agent = Agent(n_actions=env.num_actions, input_dims=(env.state_size,))
-    agent.actor.load_checkpoint()
+    agent = Agent(n_actions=env.num_actions, input_dims=(env.state_size,), device=device)
+    agent.actor.load_state_dict(torch.load('tmp/ppo/actor_torch_ppo', map_location=device))
     agent.actor.eval()
 
     observation = env.reset()
