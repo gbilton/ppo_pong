@@ -20,7 +20,7 @@ if __name__ == '__main__':
     score = np.array([0,0])
     timestep = 0
     while True:
-        # env.render()
+        env.render()
         # keys=pygame.key.get_pressed()
         # env.player1.key_movement(keys)
         # env.player2.key_movement(keys)

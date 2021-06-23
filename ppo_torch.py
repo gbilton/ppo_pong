@@ -24,21 +24,15 @@ class PPOMemory:
         np.random.shuffle(indices)
         batches = [indices[i:i+self.batch_size] for i in batch_start]
 
+        return batches
+
+    def get_memories(self):
         return np.array(self.states),\
                 np.array(self.actions),\
                 np.array(self.probs),\
                 np.array(self.vals),\
                 np.array(self.rewards),\
                 np.array(self.dones),\
-                batches
-
-    def absorb(self, memory):
-        self.states = memory.states
-        self.probs = memory.probs
-        self.vals = memory.vals
-        self.actions = memory.actions
-        self.rewards = memory.rewards
-        self.dones = memory.dones
 
     def store_memory(self, state, action, probs, vals, reward, done):
         self.states.append(state)
@@ -165,25 +159,25 @@ class Agent:
 
 
     def learn(self):
+        state_arr, action_arr, old_prob_arr, values,\
+        reward_arr, dones_arr = self.memory.get_memories()
+
+        advantage = np.zeros(len(reward_arr), dtype=np.float32)
+
+        for t in range(len(reward_arr)-1):
+            discount = 1
+            a_t = 0
+            for k in range(t, len(reward_arr)-1):
+                a_t += discount*(reward_arr[k] + self.gamma*values[k+1]*\
+                        (1-int(dones_arr[k])) - values[k])
+                discount *= self.gamma*self.gae_lambda
+            advantage[t] = a_t
+        advantage = torch.tensor(advantage).to(self.actor.device)
+
+        values = torch.tensor(values).to(self.actor.device)
+
         for _ in range(self.n_epochs):
-            state_arr, action_arr, old_prob_arr, vals_arr,\
-            reward_arr, dones_arr, batches = \
-                    self.memory.generate_batches()
-
-            values = vals_arr
-            advantage = np.zeros(len(reward_arr), dtype=np.float32)
-
-            for t in range(len(reward_arr)-1):
-                discount = 1
-                a_t = 0
-                for k in range(t, len(reward_arr)-1):
-                    a_t += discount*(reward_arr[k] + self.gamma*values[k+1]*\
-                            (1-int(dones_arr[k])) - values[k])
-                    discount *= self.gamma*self.gae_lambda
-                advantage[t] = a_t
-            advantage = torch.tensor(advantage).to(self.actor.device)
-
-            values = torch.tensor(values).to(self.actor.device)
+            batches = self.memory.generate_batches()
 
             for batch in batches:
                 states = torch.tensor(state_arr[batch], dtype=torch.float).to(self.actor.device)
