@@ -1,11 +1,11 @@
 import numpy as np
-from ppo_torch import Agent
 import random
 import sys
 import random
 
-from utils import plot_learning_curve
+from ppo_torch import Agent
 from pong import *
+
 
 if __name__ == '__main__':
     env = make('Pong-v0')
@@ -13,8 +13,7 @@ if __name__ == '__main__':
     N = 64*5
     batch_size=64
 
-    agent = Agent(n_actions=env.num_actions,input_dims=(6,), batch_size=batch_size)
-
+    agent = Agent(n_actions=env.num_actions,input_dims=(env.state_size,), batch_size=batch_size)
 
     agent.actor.load_checkpoint()
     agent.critic.load_checkpoint()
@@ -28,7 +27,7 @@ if __name__ == '__main__':
     figure_file = 'plots/pong.png'
 
     best_score = -1
-    score_history = []
+    score_history = [-1 for i in range(100)]
 
     learn_iters = 0
     avg_score = 0
@@ -66,11 +65,10 @@ if __name__ == '__main__':
             best_score = avg_score
             agent.save_models()
 
-        if avg_score >= 0.8:
+        if avg_score >= 0.4 and j >= 100:
             print('!!!!!!!!!!UPDATED!!!!!!!!!!')
             agent.save_models()
-            for i in range(100):
-                score_history.append(0)
+            score_history = [-1 for _ in range(100)]
             agent1.actor.load_state_dict(agent.actor.state_dict())
             agent1.actor.eval()
             bestscore = -1
@@ -79,5 +77,3 @@ if __name__ == '__main__':
 
         print('episode', i, 'score %.1f' % score, 'avg score %.1f' % avg_score,
                 'time_steps', n_steps, 'learning_steps', learn_iters, end='\r')
-    x = [i+1 for i in range(len(score_history))]
-    plot_learning_curve(x, score_history, figure_file)
