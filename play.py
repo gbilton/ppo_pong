@@ -18,7 +18,6 @@ if __name__ == '__main__':
 
     observation = env.reset()
     score = np.array([0,0])
-    timestep = 0
     while True:
         env.render()
         # keys=pygame.key.get_pressed()
@@ -33,10 +32,7 @@ if __name__ == '__main__':
         actions = [action1, action2]
         # for i in range(4):
         observation, _, r, done = env.step(actions)
-        timestep+=1
-        if timestep >= 10000:
-            observation = env.reset()
-            timestep = 0
+
         if done:
             if r == 1:
                 score += np.array([r,0])

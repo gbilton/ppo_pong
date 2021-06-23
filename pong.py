@@ -190,6 +190,7 @@ class Pong_env():
         self.player2_x = 50
         self.player2_y = self.screen_height/2 - self.height/2
         self.r = [-3, -2, -1, 1, 2, 3]
+        self.timestep = 0
         # self.r = [-3, -2, -1]
         self.ball_speed_x = 2 * random.choice(self.r)
         self.ball_speed_y = 2 * random.choice(self.r)
@@ -202,6 +203,7 @@ class Pong_env():
         self.clock = pygame.time.Clock()
 
     def step(self, actions):
+        self.timestep += 1
         self.player1.movement(actions[0])
         self.player2.movement(actions[1])
         self.ball.bounce(self.player1, self.player2, self.screen_height, self.maxvel)
@@ -209,11 +211,10 @@ class Pong_env():
         state = self.get_state()
         _, _, _, reward_collision2 = self.ball.collision(self.player1, self.player2)
         done, reward1, reward2 = self.score(self.player1_x, self.player1_y, self.player2_x, self.player2_y)
-        # reward -= 1
-        # reward += reward_collision2
         return state, reward1, reward2, done
 
     def reset(self):
+        self.timestep = 0
         self.ball.x = math.floor(self.screen_width/2)
         self.ball.y = math.floor(self.screen_height/2)
         self.ball.velx = 2 * random.choice(self.r)
@@ -244,14 +245,16 @@ class Pong_env():
         if point:
             self.reset()
 
+        if self.timestep >= 10000:
+            done = True
+            reward1, reward2 = -1, -1
+            self.reset()
+            return done, reward1, reward2
+
         return point, reward1, reward2
 
     def get_state(self):
         state = np.array([self.player1.y/500, self.player2.y/500, self.ball.x/800, self.ball.y/500, self.ball.velx/10, self.ball.vely/10])
-        return state
-
-    def get_state_reverse(self):
-        state = np.array([player2.y, player1.y, screen_width - ball.x, ball.y, -ball.velx, ball.vely])
         return state
 
     def render(self):
