@@ -71,7 +71,7 @@ if __name__ == '__main__':
             score_history = [-1 for _ in range(100)]
             agent1.actor.load_state_dict(agent.actor.state_dict())
             agent1.actor.eval()
-            bestscore = -1
+            best_score = -1
             j = 0
 
 
