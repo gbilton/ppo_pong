@@ -6,11 +6,13 @@ from pong import *
 if __name__ == '__main__':
     env = make('Pong-v0')
 
-    p = DQN()
-    p.load_state_dict(torch.load('tmp/dqn/model100x3.pth'))
+    device = torch.device('cpu')
+
+    p = DQN(device=device)
+    p.load_state_dict(torch.load('tmp/dqn/model100x3.pth', map_location=device))
     p.eval()
 
-    agent = Agent(n_actions=env.num_actions, input_dims=(env.state_size,))
+    agent = Agent(n_actions=env.num_actions, input_dims=(env.state_size,), device=device)
     agent.actor.load_checkpoint()
     agent.actor.eval()
 
@@ -18,7 +20,7 @@ if __name__ == '__main__':
     score = np.array([0,0])
     timestep = 0
     while True:
-        env.render()
+        # env.render()
         # keys=pygame.key.get_pressed()
         # env.player1.key_movement(keys)
         # env.player2.key_movement(keys)
@@ -28,7 +30,6 @@ if __name__ == '__main__':
         # action1 = 2
         # action1 = agent.actor.act(inverted_observation)
         # action2, _, _ = agent.choose_action(observation)
-        # print(action2)
         actions = [action1, action2]
         # for i in range(4):
         observation, _, r, done = env.step(actions)

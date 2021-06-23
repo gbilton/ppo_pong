@@ -1,11 +1,9 @@
 import os
 import numpy as np
-import torch as T
+import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
-from tqdm import tqdm
-import multiprocessing
 
 
 class PPOMemory:
@@ -34,6 +32,14 @@ class PPOMemory:
                 np.array(self.dones),\
                 batches
 
+    def absorb(self, memory):
+        self.states = memory.states
+        self.probs = memory.probs
+        self.vals = memory.vals
+        self.actions = memory.actions
+        self.rewards = memory.rewards
+        self.dones = memory.dones
+
     def store_memory(self, state, action, probs, vals, reward, done):
         self.states.append(state)
         self.actions.append(action)
@@ -51,7 +57,7 @@ class PPOMemory:
         self.vals = []
 
 class ActorNetwork(nn.Module):
-    def __init__(self, n_actions, input_dims, alpha,
+    def __init__(self, n_actions, input_dims, alpha, device,
             fc1_dims=100, fc2_dims=100, fc3_dims=100, chkpt_dir='tmp/ppo'):
         super(ActorNetwork, self).__init__()
 
@@ -68,7 +74,7 @@ class ActorNetwork(nn.Module):
         )
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device = device
         self.to(self.device)
 
     def forward(self, state):
@@ -77,17 +83,17 @@ class ActorNetwork(nn.Module):
         return dist
 
     def act(self, state):
-        state = T.tensor(state, dtype=T.float32).to(self.device)
+        state = torch.tensor(state, dtype=torch.float32).to(self.device)
         return self.actor(state).argmax().item()
 
     def save_checkpoint(self):
-        T.save(self.state_dict(), self.checkpoint_file)
+        torch.save(self.state_dict(), self.checkpoint_file)
 
     def load_checkpoint(self):
-        self.load_state_dict(T.load(self.checkpoint_file))
+        self.load_state_dict(torch.load(self.checkpoint_file, map_location=self.device))
 
 class CriticNetwork(nn.Module):
-    def __init__(self, input_dims, alpha, fc1_dims=100, fc2_dims=100, fc3_dims=100,
+    def __init__(self, input_dims, alpha, device, fc1_dims=100, fc2_dims=100, fc3_dims=100,
             chkpt_dir='tmp/ppo'):
         super(CriticNetwork, self).__init__()
 
@@ -103,7 +109,7 @@ class CriticNetwork(nn.Module):
         )
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device = device
         self.to(self.device)
 
     def forward(self, state):
@@ -112,21 +118,22 @@ class CriticNetwork(nn.Module):
         return value
 
     def save_checkpoint(self):
-        T.save(self.state_dict(), self.checkpoint_file)
+        torch.save(self.state_dict(), self.checkpoint_file)
 
     def load_checkpoint(self):
-        self.load_state_dict(T.load(self.checkpoint_file))
+        self.load_state_dict(torch.load(self.checkpoint_file, map_location=self.device))
 
 class Agent:
-    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, gae_lambda=0.95,
-            policy_clip=0.1, batch_size=64, n_epochs=10):
+    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003,
+            gae_lambda=0.95, policy_clip=0.1, batch_size=64, n_epochs=10,
+            device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')):
         self.gamma = gamma
         self.policy_clip = policy_clip
         self.n_epochs = n_epochs
         self.gae_lambda = gae_lambda
 
-        self.actor = ActorNetwork(n_actions, input_dims, alpha)
-        self.critic = CriticNetwork(input_dims, alpha)
+        self.actor = ActorNetwork(n_actions, input_dims, alpha, device)
+        self.critic = CriticNetwork(input_dims, alpha, device)
         self.memory = PPOMemory(batch_size)
 
     def remember(self, state, action, probs, vals, reward, done):
@@ -143,18 +150,19 @@ class Agent:
         self.critic.load_checkpoint()
 
     def choose_action(self, observation):
-        state = T.tensor([observation], dtype=T.float).to(self.actor.device)
+        state = torch.tensor([observation], dtype=torch.float).to(self.actor.device)
 
 
         dist = self.actor(state)
         value = self.critic(state)
         action = dist.sample()
 
-        probs = T.squeeze(dist.log_prob(action)).item()
-        action = T.squeeze(action).item()
-        value = T.squeeze(value).item()
+        probs = torch.squeeze(dist.log_prob(action)).item()
+        action = torch.squeeze(action).item()
+        value = torch.squeeze(value).item()
 
         return action, probs, value
+
 
     def learn(self):
         for _ in range(self.n_epochs):
@@ -173,27 +181,27 @@ class Agent:
                             (1-int(dones_arr[k])) - values[k])
                     discount *= self.gamma*self.gae_lambda
                 advantage[t] = a_t
-            advantage = T.tensor(advantage).to(self.actor.device)
+            advantage = torch.tensor(advantage).to(self.actor.device)
 
-            values = T.tensor(values).to(self.actor.device)
+            values = torch.tensor(values).to(self.actor.device)
 
             for batch in batches:
-                states = T.tensor(state_arr[batch], dtype=T.float).to(self.actor.device)
-                old_probs = T.tensor(old_prob_arr[batch]).to(self.actor.device)
-                actions = T.tensor(action_arr[batch]).to(self.actor.device)
+                states = torch.tensor(state_arr[batch], dtype=torch.float).to(self.actor.device)
+                old_probs = torch.tensor(old_prob_arr[batch]).to(self.actor.device)
+                actions = torch.tensor(action_arr[batch]).to(self.actor.device)
 
                 dist = self.actor(states)
                 critic_value = self.critic(states)
 
-                critic_value = T.squeeze(critic_value)
+                critic_value = torch.squeeze(critic_value)
 
                 new_probs = dist.log_prob(actions)
                 prob_ratio = new_probs.exp() / old_probs.exp()
                 #prob_ratio = (new_probs - old_probs).exp()
                 weighted_probs = advantage[batch] * prob_ratio
-                weighted_clipped_probs = T.clamp(prob_ratio, 1-self.policy_clip,
+                weighted_clipped_probs = torch.clamp(prob_ratio, 1-self.policy_clip,
                         1+self.policy_clip)*advantage[batch]
-                actor_loss = -T.min(weighted_probs, weighted_clipped_probs).mean()
+                actor_loss = -torch.min(weighted_probs, weighted_clipped_probs).mean()
 
                 returns = advantage[batch] + values[batch]
                 critic_loss = (returns-critic_value)**2
