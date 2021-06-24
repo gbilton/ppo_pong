@@ -191,11 +191,12 @@ class Pong_env():
         self.player2_y = self.screen_height/2 - self.height/2
         self.r = [-3, -2, -1, 1, 2, 3]
         self.timestep = 0
+        self.max_timestep = 10000
         # self.r = [-3, -2, -1]
         self.ball_speed_x = 2 * random.choice(self.r)
         self.ball_speed_y = 2 * random.choice(self.r)
         self.num_actions = 3
-        self.state_size = 6
+        self.state_size = 7
         self.win = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.player2 = Player(self.player2_x, self.player2_y, self.height, self.width, self.player_speed, "K_w", "K_s", self.num_actions, self.state_size, self.screen_height)
         self.player1 = Player(self.player1_x, self.player1_y, self.height, self.width, self.player_speed, "K_UP", "K_DOWN", self.num_actions, self.state_size, self.screen_height)
@@ -223,7 +224,7 @@ class Pong_env():
         self.player1.y = self.player1_y
         self.player2.x = self.player2_x
         self.player2.y = self.player2_y
-        state = np.array([self.player1.y/500, self.player2.y/500, self.ball.x/800, self.ball.y/500, self.ball.velx/10, self.ball.vely/10])
+        state = self.get_state()
 
         return state
 
@@ -245,7 +246,7 @@ class Pong_env():
         if point:
             self.reset()
 
-        if self.timestep >= 10000:
+        if self.timestep >= self.max_timestep:
             done = True
             reward1, reward2 = -1, -1
             self.reset()
@@ -254,7 +255,7 @@ class Pong_env():
         return point, reward1, reward2
 
     def get_state(self):
-        state = np.array([self.player1.y/500, self.player2.y/500, self.ball.x/800, self.ball.y/500, self.ball.velx/10, self.ball.vely/10])
+        state = np.array([self.player1.y/500, self.player2.y/500, self.ball.x/800, self.ball.y/500, self.ball.velx/10, self.ball.vely/10, self.timestep/self.max_timestep])
         return state
 
     def render(self):
@@ -295,9 +296,10 @@ class Tools():
         by = state[3]
         bvx = state[4]
         bvy = state[5]
-        return np.array([p2_y, p1_y, getattr(Pong_env, 'screen_width')/800 - bx, by, -bvx, bvy])
+        timestep = state[6]
+        return np.array([p2_y, p1_y, getattr(Pong_env, 'screen_width')/800 - bx, by, -bvx, bvy, timestep])
 class DQN(nn.Module):
-    def __init__(self, input_size = 6, output_size = 3,
+    def __init__(self, input_size = 7, output_size = 3,
             device=torch.device('cpu')):
         super(DQN, self).__init__()
 

@@ -13,11 +13,11 @@ if __name__ == '__main__':
     device = torch.device('cpu')
 
     p = DQN(device=device)
-    p.load_state_dict(torch.load('tmp/dqn/model100x3.pth', map_location=device))
+    # p.load_state_dict(torch.load('tmp/dqn/model100x3.pth', map_location=device))
     p.eval()
 
     agent = Agent(n_actions=env.num_actions, input_dims=(env.state_size,), device=device)
-    agent.actor.load_checkpoint()
+    # agent.actor.load_checkpoint()
     agent.actor.eval()
 
     observation = env.reset()
@@ -30,15 +30,16 @@ if __name__ == '__main__':
 
         if record:
             save_imgs(env.win, i)
-        # with open(f'recordings/frame_{i}', 'wb') as f:
-            # f.write(frame)
+
 
         # keys=pygame.key.get_pressed()
         # env.player1.key_movement(keys)
+
         # env.player2.key_movement(keys)
         action2 = agent.actor.act(observation)
         inverted_observation = Tools.invert(observation)
         action1 = p.act(inverted_observation)
+        print(observation[-1])
         # action1 = 2
         # action2, _, _ = agent.choose_action(observation)
         actions = [action1, action2]
