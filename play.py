@@ -27,7 +27,6 @@ if __name__ == '__main__':
         inverted_observation = Tools.invert(observation)
         action1 = p.act(inverted_observation)
         # action1 = 2
-        # action1 = agent.actor.act(inverted_observation)
         # action2, _, _ = agent.choose_action(observation)
         actions = [action1, action2]
         # for i in range(4):

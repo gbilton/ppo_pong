@@ -10,10 +10,10 @@ from pong import *
 if __name__ == '__main__':
     env = make('Pong-v0')
 
-    N = 64*5
-    batch_size=64
+    batch_size=256
+    N = batch_size*5
 
-    agent = Agent(n_actions=env.num_actions,input_dims=(env.state_size,), batch_size=batch_size)
+    agent = Agent(n_actions=env.num_actions,input_dims=(env.state_size,), batch_size=batch_size, n_epochs=20)
 
     agent.actor.load_checkpoint()
     agent.critic.load_checkpoint()
@@ -61,9 +61,9 @@ if __name__ == '__main__':
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
 
-        if avg_score > best_score and j >= 100:
-            best_score = avg_score
-            agent.save_models()
+        # if avg_score > best_score and j >= 100:
+        #     best_score = avg_score
+        #     agent.save_models()
 
         if avg_score >= 0.4 and j >= 100:
             print('!!!!!!!!!!UPDATED!!!!!!!!!!')
