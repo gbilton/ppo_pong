@@ -299,7 +299,7 @@ class Tools():
         timestep = state[6]
         return np.array([p2_y, p1_y, getattr(Pong_env, 'screen_width')/800 - bx, by, -bvx, bvy, timestep])
 class DQN(nn.Module):
-    def __init__(self, input_size = 7, output_size = 3,
+    def __init__(self, input_size = 6, output_size = 3,
             device=torch.device('cpu')):
         super(DQN, self).__init__()
 
