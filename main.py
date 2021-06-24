@@ -15,8 +15,8 @@ if __name__ == '__main__':
 
     agent = Agent(n_actions=env.num_actions,input_dims=(env.state_size,), batch_size=batch_size, n_epochs=20)
 
-    # agent.actor.load_checkpoint()
-    # agent.critic.load_checkpoint()
+    agent.actor.load_checkpoint()
+    agent.critic.load_checkpoint()
 
     agent1 = Agent(n_actions=env.num_actions,input_dims=(env.state_size,))
     agent1.actor.load_state_dict(agent.actor.state_dict())
@@ -65,7 +65,7 @@ if __name__ == '__main__':
         #     best_score = avg_score
         #     agent.save_models()
 
-        if avg_score >= 0.4 and j >= 100:
+        if avg_score >= 0.8 and j >= 100:
             print('!!!!!!!!!!UPDATED!!!!!!!!!!')
             agent.save_models()
             score_history = [-1 for _ in range(100)]
