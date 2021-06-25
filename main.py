@@ -2,6 +2,7 @@ import numpy as np
 import random
 import sys
 import random
+from itertools import count
 
 from ppo_torch import Agent
 from pong import *
@@ -22,8 +23,6 @@ if __name__ == '__main__':
     agent1.actor.load_state_dict(agent.actor.state_dict())
     agent1.actor.eval()
 
-    n_games = 100000
-
     figure_file = 'plots/pong.png'
 
     best_score = -1
@@ -37,7 +36,7 @@ if __name__ == '__main__':
     observation = env.reset()
 
 
-    for i in range(n_games):
+    for i in count():
         j+=1
         observation = env.reset()
         done = False
@@ -65,7 +64,7 @@ if __name__ == '__main__':
         #     best_score = avg_score
         #     agent.save_models()
 
-        if avg_score >= 0.8 and j >= 100:
+        if avg_score >= 0.4 and j >= 100:
             print('!!!!!!!!!!UPDATED!!!!!!!!!!')
             agent.save_models()
             score_history = [-1 for _ in range(100)]
