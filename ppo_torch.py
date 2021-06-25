@@ -118,8 +118,8 @@ class CriticNetwork(nn.Module):
         self.load_state_dict(torch.load(self.checkpoint_file, map_location=self.device))
 
 class Agent:
-    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003,
-            gae_lambda=0.95, policy_clip=0.1, batch_size=64, n_epochs=10,
+    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, beta=0.001,
+            gae_lambda=0.95, policy_clip=0.2, batch_size=64, n_epochs=50,
             device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')):
         self.gamma = gamma
         self.policy_clip = policy_clip
@@ -127,7 +127,7 @@ class Agent:
         self.gae_lambda = gae_lambda
 
         self.actor = ActorNetwork(n_actions, input_dims, alpha, device)
-        self.critic = CriticNetwork(input_dims, alpha, device)
+        self.critic = CriticNetwork(input_dims, beta, device)
         self.memory = PPOMemory(batch_size)
 
     def remember(self, state, action, probs, vals, reward, done):
@@ -157,8 +157,7 @@ class Agent:
 
         return action, probs, value
 
-
-    def learn(self):
+    def calculate_advantage_old(self):
         state_arr, action_arr, old_prob_arr, values,\
         reward_arr, dones_arr = self.memory.get_memories()
 
@@ -172,6 +171,32 @@ class Agent:
                         (1-int(dones_arr[k])) - values[k])
                 discount *= self.gamma*self.gae_lambda
             advantage[t] = a_t
+
+        return advantage, state_arr, action_arr, old_prob_arr, values,\
+        reward_arr, dones_arr
+
+    def calculate_advantage(self):
+        state_arr, action_arr, old_prob_arr, values,\
+        reward_arr, dones_arr = self.memory.get_memories()
+
+        batch_size = dones_arr.shape[0]
+
+        advantage = np.zeros(batch_size + 1)
+
+        for t in reversed(range(batch_size-1)):
+            delta = reward_arr[t] + self.gamma*values[t+1]*\
+                    (1-int(dones_arr[t])) - values[t]
+            advantage[t] = delta + (self.gamma * self.gae_lambda *\
+                            advantage[t+1] * 1-int(dones_arr[t]))
+
+        return advantage[:-1], state_arr, action_arr, old_prob_arr, values,\
+        reward_arr, dones_arr
+
+    def learn(self):
+
+        advantage, state_arr, action_arr, old_prob_arr, values,\
+        reward_arr, dones_arr = self.calculate_advantage()
+
         advantage = torch.tensor(advantage).to(self.actor.device)
 
         values = torch.tensor(values).to(self.actor.device)
