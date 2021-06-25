@@ -64,7 +64,7 @@ if __name__ == '__main__':
         #     best_score = avg_score
         #     agent.save_models()
 
-        if avg_score >= 0.8 and j >= 100:
+        if avg_score >= 0.4 and j >= 100:
             print('!!!!!!!!!!UPDATED!!!!!!!!!!')
             agent.save_models()
             score_history = [-1 for _ in range(100)]
