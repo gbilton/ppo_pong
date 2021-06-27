@@ -191,7 +191,7 @@ class Pong_env():
         self.player2_y = self.screen_height/2 - self.height/2
         self.r = [-3, -2, -1, 1, 2, 3]
         self.timestep = 0
-        self.max_timestep = 10000
+        self.max_timestep = 3000
         # self.r = [-3, -2, -1]
         self.ball_speed_x = 2 * random.choice(self.r)
         self.ball_speed_y = 2 * random.choice(self.r)
@@ -319,6 +319,7 @@ class DQN(nn.Module):
         return t
 
     def act(self, observation):
+        observation = observation[:-1]
         observation = torch.tensor(observation, dtype=torch.float).to(self.device)
         action = self.forward(observation)
         return action.argmax().item()
