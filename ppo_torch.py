@@ -118,8 +118,8 @@ class CriticNetwork(nn.Module):
         self.load_state_dict(torch.load(self.checkpoint_file, map_location=self.device))
 
 class Agent:
-    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, beta=0.001,
-            gae_lambda=0.95, policy_clip=0.2, batch_size=64, n_epochs=50,
+    def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, beta=0.0003,
+            gae_lambda=0.95, policy_clip=0.1, batch_size=64, n_epochs=100,
             device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')):
         self.gamma = gamma
         self.policy_clip = policy_clip
