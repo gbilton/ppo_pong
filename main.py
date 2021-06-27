@@ -27,8 +27,6 @@ if __name__ == '__main__':
     # p.load_state_dict(torch.load('tmp/dqn/model100x3.pth'))
     # p.eval()
 
-    figure_file = 'plots/pong.png'
-
     best_score = -1
     score_history = [-1 for i in range(100)]
 
@@ -36,9 +34,6 @@ if __name__ == '__main__':
     avg_score = 0
     n_steps = 0
     j = 0
-
-    observation = env.reset()
-
 
     for i in count():
         j+=1
