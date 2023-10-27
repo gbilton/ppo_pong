@@ -1,0 +1,50 @@
+version: '3'
+services:
+  container1:
+    build: .
+    volumes:
+      - ./tmp/docker/models:/app/tmp/docker/models
+      - ./tmp/docker/json_files:/app/tmp/docker/json_files
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - REPLICA_ID=1  # Set a unique replica ID for this service
+      - ALPHA=0.0003
+      - N=5000
+      - BATCH_SIZE=512
+  container2:
+    build: .
+    volumes:
+      - ./tmp/docker/models:/app/tmp/docker/models
+      - ./tmp/docker/json_files:/app/tmp/docker/json_files
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - REPLICA_ID=2  # Set a unique replica ID for this service
+      - ALPHA=0.0003
+      - N=10000
+      - BATCH_SIZE=128
+  container3:
+    build: .
+    volumes:
+      - ./tmp/docker/models:/app/tmp/docker/models
+      - ./tmp/docker/json_files:/app/tmp/docker/json_files
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - REPLICA_ID=3  # Set a unique replica ID for this service
+      - ALPHA=0.0001
+      - N=5000
+      - BATCH_SIZE=128
+  container4:
+    build: .
+    volumes:
+      - ./tmp/docker/models:/app/tmp/docker/models
+      - ./tmp/docker/json_files:/app/tmp/docker/json_files
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - REPLICA_ID=4  # Set a unique replica ID for this service
+      - ALPHA=0.0001
+      - N=10000
+      - BATCH_SIZE=512

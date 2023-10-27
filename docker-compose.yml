@@ -1,0 +1,12 @@
+version: '3'
+services:
+  container1:
+    build: .
+    volumes:
+      - ./tmp/docker/models:/app/tmp/docker/models
+      - ./tmp/docker/json_files:/app/tmp/docker/json_files
+      - ./tmp/docker/legacy_models:/app/tmp/docker/legacy_models
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - REPLICA_ID=1  # Set a unique replica ID for this service

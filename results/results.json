@@ -1,0 +1,56 @@
+[
+    {
+        "match": "actor_torch_ppo_1 X actor_torch_ppo_2",
+        "score": [
+            100,
+            76
+        ],
+        "winner": "actor_torch_ppo_1",
+        "loser": "actor_torch_ppo_2"
+    },
+    {
+        "match": "actor_torch_ppo_1 X actor_torch_ppo_3",
+        "score": [
+            20,
+            100
+        ],
+        "winner": "actor_torch_ppo_3",
+        "loser": "actor_torch_ppo_1"
+    },
+    {
+        "match": "actor_torch_ppo_1 X actor_torch_ppo_4",
+        "score": [
+            68,
+            100
+        ],
+        "winner": "actor_torch_ppo_4",
+        "loser": "actor_torch_ppo_1"
+    },
+    {
+        "match": "actor_torch_ppo_2 X actor_torch_ppo_3",
+        "score": [
+            59,
+            100
+        ],
+        "winner": "actor_torch_ppo_3",
+        "loser": "actor_torch_ppo_2"
+    },
+    {
+        "match": "actor_torch_ppo_2 X actor_torch_ppo_4",
+        "score": [
+            100,
+            84
+        ],
+        "winner": "actor_torch_ppo_2",
+        "loser": "actor_torch_ppo_4"
+    },
+    {
+        "match": "actor_torch_ppo_3 X actor_torch_ppo_4",
+        "score": [
+            100,
+            19
+        ],
+        "winner": "actor_torch_ppo_3",
+        "loser": "actor_torch_ppo_4"
+    }
+]

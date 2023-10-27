@@ -1,6 +1,6 @@
+import json
 import numpy as np
 import random
-import sys
 import random
 from itertools import count
 
@@ -8,17 +8,19 @@ from ppo_torch import Agent
 from pong import *
 
 
-if __name__ == '__main__':
-    env = make('Pong-v0')
+if __name__ == "__main__":
+    env = make("Pong-v0")
 
     batch_size = 1000
     N = 4000
 
-    agent = Agent(n_actions=env.num_actions,input_dims=(env.state_size,), batch_size=batch_size)
+    agent = Agent(
+        n_actions=env.num_actions, input_dims=(env.state_size,), batch_size=batch_size
+    )
 
     agent.load_models()
 
-    agent1 = Agent(n_actions=env.num_actions,input_dims=(env.state_size,))
+    agent1 = Agent(n_actions=env.num_actions, input_dims=(env.state_size,))
     agent1.actor.load_state_dict(agent.actor.state_dict())
     agent1.actor.eval()
 
@@ -28,14 +30,26 @@ if __name__ == '__main__':
 
     best_score = -1
     score_history = [-1 for i in range(100)]
-
+    SCORE_THRESHOLD = 0.4
     learn_iters = 0
     avg_score = 0
     n_steps = 0
     j = 0
 
+    # Directory where you want to save the JSON files
+    json_save_directory = "/app/tmp/docker/json_files/"
+
+    # Initialize replica ID
+    replica_id = int(os.getenv("REPLICA_ID", "0"))
+
+    # File path for the JSON data
+    json_file_path = f"{json_save_directory}avg_score_replica{replica_id}.json"
+
+    avg_scores = []
+    episodes_time = []
     for i in count():
-        j+=1
+        start_time = time.time()
+        j += 1
         observation = env.reset()
         done = False
         score = 0
@@ -52,19 +66,30 @@ if __name__ == '__main__':
             score += reward
             agent.remember(observation, action, prob, val, reward, done)
             if n_steps % N == 0:
-                print(random.choice(list(range(10))), end = '\r')
+                print(random.choice(list(range(10))), end="\r")
                 agent.learn()
                 learn_iters += 1
             observation = observation_
+        episode_time = time.time() - start_time
+        episodes_time.append(episode_time)
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
+        avg_scores.append(avg_score)
 
-        # if avg_score > best_score and j >= 100:
-            # best_score = avg_score
-            # agent.save_models()
+        if (i + 1) % 100 == 0:
+            # Create a dictionary with replica ID and avg_score
+            avg_score_data = {
+                "replica_id": replica_id,
+                "avg_scores": avg_scores,
+                "episodes_time": episodes_time,
+            }
 
-        if avg_score >= 0.4 and j >= 100:
-            print('!!!!!!!!!!UPDATED!!!!!!!!!!')
+            # Save the dictionary as JSON
+            with open(json_file_path, "w") as json_file:
+                json.dump(avg_score_data, json_file)
+
+        if avg_score >= SCORE_THRESHOLD and j >= 100:
+            print("!!!!!!!!!!UPDATED!!!!!!!!!!")
             agent.save_models()
             score_history = [-1 for _ in range(100)]
             agent1.actor.load_state_dict(agent.actor.state_dict())
@@ -72,6 +97,14 @@ if __name__ == '__main__':
             best_score = -1
             j = 0
 
-
-        print('episode', i, 'score %.1f' % score, 'avg score %.1f' % avg_score,
-                'time_steps', n_steps, 'learning_steps', learn_iters, end='\r')
+        print(
+            "episode",
+            i,
+            "score %.1f" % score,
+            "avg score %.1f" % avg_score,
+            "time_steps",
+            n_steps,
+            "learning_steps",
+            learn_iters,
+            end="\r",
+        )
