@@ -9,6 +9,7 @@ from multiprocessing import (
     Event,
     Queue,
     Lock,
+    cpu_count,
 )
 
 # Ensure the "spawn" start method is used for multiprocessing
@@ -45,7 +46,13 @@ def worker_agent(
         agent.load_models()
 
     # bot_names = ["actor", "actor copy", "actor_torch_ppo_1", "actor_goat"]
-    bot_names = ["actor_goat"]
+    bot_names = [
+        "actor copy",
+        "actor_torch_ppo",
+        "actor_goat copy",
+        "actor_goat copy 2",
+        "actor_torch_ppo_1",
+    ]
     bots = []
     for bot_name in bot_names:
         bot = Agent(
@@ -199,7 +206,7 @@ def central_learner(
 
 
 if __name__ == "__main__":
-    num_workers = 10
+    num_workers = cpu_count() - 2
 
     data_queue = Queue()
     score_queue = Queue()
