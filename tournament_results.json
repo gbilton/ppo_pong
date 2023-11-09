@@ -1,0 +1,407 @@
+[
+    {
+        "match": "actor X actor_goat",
+        "score": [
+            20,
+            100
+        ],
+        "winner": "actor_goat",
+        "loser": "actor"
+    },
+    {
+        "match": "actor X actor copy",
+        "score": [
+            100,
+            8
+        ],
+        "winner": "actor",
+        "loser": "actor copy"
+    },
+    {
+        "match": "actor X actor_torch_ppo",
+        "score": [
+            100,
+            2
+        ],
+        "winner": "actor",
+        "loser": "actor_torch_ppo"
+    },
+    {
+        "match": "actor X actor_goat copy",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor",
+        "loser": "actor_goat copy"
+    },
+    {
+        "match": "actor X actor_goat copy 2",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor",
+        "loser": "actor_goat copy 2"
+    },
+    {
+        "match": "actor X actor_goat copy 3",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor",
+        "loser": "actor_goat copy 3"
+    },
+    {
+        "match": "actor X actor_goat copy 4",
+        "score": [
+            100,
+            9
+        ],
+        "winner": "actor",
+        "loser": "actor_goat copy 4"
+    },
+    {
+        "match": "actor X actor_goat copy 5",
+        "score": [
+            100,
+            36
+        ],
+        "winner": "actor",
+        "loser": "actor_goat copy 5"
+    },
+    {
+        "match": "actor X actor_torch_ppo_1",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor",
+        "loser": "actor_torch_ppo_1"
+    },
+    {
+        "match": "actor_goat X actor copy",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor_goat",
+        "loser": "actor copy"
+    },
+    {
+        "match": "actor_goat X actor_torch_ppo",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor_goat",
+        "loser": "actor_torch_ppo"
+    },
+    {
+        "match": "actor_goat X actor_goat copy",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor_goat",
+        "loser": "actor_goat copy"
+    },
+    {
+        "match": "actor_goat X actor_goat copy 2",
+        "score": [
+            100,
+            4
+        ],
+        "winner": "actor_goat",
+        "loser": "actor_goat copy 2"
+    },
+    {
+        "match": "actor_goat X actor_goat copy 3",
+        "score": [
+            100,
+            7
+        ],
+        "winner": "actor_goat",
+        "loser": "actor_goat copy 3"
+    },
+    {
+        "match": "actor_goat X actor_goat copy 4",
+        "score": [
+            100,
+            8
+        ],
+        "winner": "actor_goat",
+        "loser": "actor_goat copy 4"
+    },
+    {
+        "match": "actor_goat X actor_goat copy 5",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor_goat",
+        "loser": "actor_goat copy 5"
+    },
+    {
+        "match": "actor_goat X actor_torch_ppo_1",
+        "score": [
+            100,
+            0
+        ],
+        "winner": "actor_goat",
+        "loser": "actor_torch_ppo_1"
+    },
+    {
+        "match": "actor copy X actor_torch_ppo",
+        "score": [
+            100,
+            30
+        ],
+        "winner": "actor copy",
+        "loser": "actor_torch_ppo"
+    },
+    {
+        "match": "actor copy X actor_goat copy",
+        "score": [
+            17,
+            100
+        ],
+        "winner": "actor_goat copy",
+        "loser": "actor copy"
+    },
+    {
+        "match": "actor copy X actor_goat copy 2",
+        "score": [
+            8,
+            100
+        ],
+        "winner": "actor_goat copy 2",
+        "loser": "actor copy"
+    },
+    {
+        "match": "actor copy X actor_goat copy 3",
+        "score": [
+            5,
+            100
+        ],
+        "winner": "actor_goat copy 3",
+        "loser": "actor copy"
+    },
+    {
+        "match": "actor copy X actor_goat copy 4",
+        "score": [
+            41,
+            100
+        ],
+        "winner": "actor_goat copy 4",
+        "loser": "actor copy"
+    },
+    {
+        "match": "actor copy X actor_goat copy 5",
+        "score": [
+            16,
+            100
+        ],
+        "winner": "actor_goat copy 5",
+        "loser": "actor copy"
+    },
+    {
+        "match": "actor copy X actor_torch_ppo_1",
+        "score": [
+            100,
+            82
+        ],
+        "winner": "actor copy",
+        "loser": "actor_torch_ppo_1"
+    },
+    {
+        "match": "actor_torch_ppo X actor_goat copy",
+        "score": [
+            100,
+            92
+        ],
+        "winner": "actor_torch_ppo",
+        "loser": "actor_goat copy"
+    },
+    {
+        "match": "actor_torch_ppo X actor_goat copy 2",
+        "score": [
+            12,
+            100
+        ],
+        "winner": "actor_goat copy 2",
+        "loser": "actor_torch_ppo"
+    },
+    {
+        "match": "actor_torch_ppo X actor_goat copy 3",
+        "score": [
+            0,
+            100
+        ],
+        "winner": "actor_goat copy 3",
+        "loser": "actor_torch_ppo"
+    },
+    {
+        "match": "actor_torch_ppo X actor_goat copy 4",
+        "score": [
+            6,
+            100
+        ],
+        "winner": "actor_goat copy 4",
+        "loser": "actor_torch_ppo"
+    },
+    {
+        "match": "actor_torch_ppo X actor_goat copy 5",
+        "score": [
+            1,
+            100
+        ],
+        "winner": "actor_goat copy 5",
+        "loser": "actor_torch_ppo"
+    },
+    {
+        "match": "actor_torch_ppo X actor_torch_ppo_1",
+        "score": [
+            4,
+            100
+        ],
+        "winner": "actor_torch_ppo_1",
+        "loser": "actor_torch_ppo"
+    },
+    {
+        "match": "actor_goat copy X actor_goat copy 2",
+        "score": [
+            29,
+            100
+        ],
+        "winner": "actor_goat copy 2",
+        "loser": "actor_goat copy"
+    },
+    {
+        "match": "actor_goat copy X actor_goat copy 3",
+        "score": [
+            0,
+            100
+        ],
+        "winner": "actor_goat copy 3",
+        "loser": "actor_goat copy"
+    },
+    {
+        "match": "actor_goat copy X actor_goat copy 4",
+        "score": [
+            0,
+            100
+        ],
+        "winner": "actor_goat copy 4",
+        "loser": "actor_goat copy"
+    },
+    {
+        "match": "actor_goat copy X actor_goat copy 5",
+        "score": [
+            13,
+            100
+        ],
+        "winner": "actor_goat copy 5",
+        "loser": "actor_goat copy"
+    },
+    {
+        "match": "actor_goat copy X actor_torch_ppo_1",
+        "score": [
+            100,
+            39
+        ],
+        "winner": "actor_goat copy",
+        "loser": "actor_torch_ppo_1"
+    },
+    {
+        "match": "actor_goat copy 2 X actor_goat copy 3",
+        "score": [
+            7,
+            100
+        ],
+        "winner": "actor_goat copy 3",
+        "loser": "actor_goat copy 2"
+    },
+    {
+        "match": "actor_goat copy 2 X actor_goat copy 4",
+        "score": [
+            5,
+            100
+        ],
+        "winner": "actor_goat copy 4",
+        "loser": "actor_goat copy 2"
+    },
+    {
+        "match": "actor_goat copy 2 X actor_goat copy 5",
+        "score": [
+            6,
+            100
+        ],
+        "winner": "actor_goat copy 5",
+        "loser": "actor_goat copy 2"
+    },
+    {
+        "match": "actor_goat copy 2 X actor_torch_ppo_1",
+        "score": [
+            51,
+            100
+        ],
+        "winner": "actor_torch_ppo_1",
+        "loser": "actor_goat copy 2"
+    },
+    {
+        "match": "actor_goat copy 3 X actor_goat copy 4",
+        "score": [
+            81,
+            100
+        ],
+        "winner": "actor_goat copy 4",
+        "loser": "actor_goat copy 3"
+    },
+    {
+        "match": "actor_goat copy 3 X actor_goat copy 5",
+        "score": [
+            19,
+            100
+        ],
+        "winner": "actor_goat copy 5",
+        "loser": "actor_goat copy 3"
+    },
+    {
+        "match": "actor_goat copy 3 X actor_torch_ppo_1",
+        "score": [
+            100,
+            1
+        ],
+        "winner": "actor_goat copy 3",
+        "loser": "actor_torch_ppo_1"
+    },
+    {
+        "match": "actor_goat copy 4 X actor_goat copy 5",
+        "score": [
+            100,
+            72
+        ],
+        "winner": "actor_goat copy 4",
+        "loser": "actor_goat copy 5"
+    },
+    {
+        "match": "actor_goat copy 4 X actor_torch_ppo_1",
+        "score": [
+            100,
+            4
+        ],
+        "winner": "actor_goat copy 4",
+        "loser": "actor_torch_ppo_1"
+    },
+    {
+        "match": "actor_goat copy 5 X actor_torch_ppo_1",
+        "score": [
+            100,
+            3
+        ],
+        "winner": "actor_goat copy 5",
+        "loser": "actor_torch_ppo_1"
+    }
+]

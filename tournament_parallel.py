@@ -48,13 +48,26 @@ if __name__ == "__main__":
     env = make("Pong-v0")
     device = torch.device("cpu")
 
+    names = [
+        "actor",
+        "actor_goat",
+        "actor copy",
+        "actor_torch_ppo",
+        "actor_goat copy",
+        "actor_goat copy 2",
+        "actor_goat copy 3",
+        "actor_goat copy 4",
+        "actor_goat copy 5",
+        "actor_torch_ppo_1",
+    ]
     agents = []
-    for i in range(1, 5):
-        agent_name = f"actor_torch_ppo_{i}"
+    for agent_name in names:
         agent = Agent(
             n_actions=env.num_actions, input_dims=(env.state_size,), device=device
         )
-        agent.actor.checkpoint_file = os.path.join("./tmp/docker/models", agent_name)
+        agent.actor.checkpoint_file = os.path.join(
+            "./tmp/docker/legacy_models", agent_name
+        )
         agent.actor.load_checkpoint()
         agent.actor.eval()
         agents.append({"agent_name": agent_name, "agent": agent})
@@ -63,8 +76,8 @@ if __name__ == "__main__":
     results = []
 
     # Parallelize match simulations
-    with Pool(processes=4) as pool:  # Set the number of processes you want to use
+    with Pool(processes=10) as pool:  # Set the number of processes you want to use
         results = pool.map(simulate_match, match_combinations)
 
-    with open("results.json", "w") as f:
+    with open("tournament_results.json", "w") as f:
         json.dump(results, f)

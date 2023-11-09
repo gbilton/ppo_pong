@@ -1,4 +1,5 @@
 import json
+import shutil
 import numpy as np
 from ppo_torch import Agent
 from pong import *
@@ -35,12 +36,8 @@ def worker_agent(
     agent = Agent(
         n_actions=env.num_actions, input_dims=(env.state_size,), device=device
     )
-    agent.actor.checkpoint_file = os.path.join(
-        "./tmp/docker/legacy_models", "actor_goat"
-    )
-    agent.critic.checkpoint_file = os.path.join(
-        "./tmp/docker/legacy_models", "critic_goat"
-    )
+    agent.actor.checkpoint_file = os.path.join("./tmp/docker/legacy_models", "actor")
+    agent.critic.checkpoint_file = os.path.join("./tmp/docker/legacy_models", "critic")
 
     with policy_lock:
         agent.load_models()
@@ -51,6 +48,15 @@ def worker_agent(
         "actor_torch_ppo",
         "actor_goat copy",
         "actor_goat copy 2",
+        "actor_goat copy 3",
+        "actor_goat copy 3",
+        "actor_goat copy 4",
+        "actor_goat copy 4",
+        "actor_goat copy 4",
+        "actor_goat copy 5",
+        "actor_goat copy 5",
+        "actor_goat copy 5",
+        "actor_goat copy 5",
         "actor_torch_ppo_1",
     ]
     bots = []
@@ -131,10 +137,10 @@ def central_learner(
         batch_size=1000,  # You can adjust this as needed
     )
     central_agent.actor.checkpoint_file = os.path.join(
-        "./tmp/docker/legacy_models", "actor_goat"
+        "./tmp/docker/legacy_models", "actor"
     )
     central_agent.critic.checkpoint_file = os.path.join(
-        "./tmp/docker/legacy_models", "critic_goat"
+        "./tmp/docker/legacy_models", "critic"
     )
 
     with policy_lock:
@@ -206,6 +212,15 @@ def central_learner(
 
 
 if __name__ == "__main__":
+    shutil.copy(
+        src="./tmp/docker/legacy_models/actor_goat",
+        dst="./tmp/docker/legacy_models/actor",
+    )
+    shutil.copy(
+        src="./tmp/docker/legacy_models/critic_goat",
+        dst="./tmp/docker/legacy_models/critic",
+    )
+
     num_workers = cpu_count() - 2
 
     data_queue = Queue()

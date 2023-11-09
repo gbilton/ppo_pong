@@ -8,8 +8,15 @@ if __name__ == "__main__":
     env = make("Pong-v0")
     device = torch.device("cpu")
 
-    agents = []
-    for i in range(1, 5):
+    agents = [
+        "actor_goat",
+        "actor copy",
+        "actor_torch_ppo",
+        "actor_goat copy",
+        "actor_goat copy 2",
+        "actor_torch_ppo_1",
+    ]
+    for i in agents:
         agent_name = f"actor_torch_ppo_{i}"
         agent = Agent(
             n_actions=env.num_actions, input_dims=(env.state_size,), device=device
@@ -76,5 +83,5 @@ if __name__ == "__main__":
                 break
         results.append(match_results)
 
-    with open("results.json", "w") as f:
+    with open("tournament_results.json", "w") as f:
         json.dump(results, f)
