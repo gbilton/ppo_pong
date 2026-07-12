@@ -170,7 +170,7 @@ def load_policy(path, n_actions, input_dims, device=torch.device("cpu")):
         if not candidates:
             raise FileNotFoundError(f"no actor checkpoint found in {path}")
         path = os.path.join(path, candidates[0])
-    payload = torch.load(path, map_location=device)
+    payload = torch.load(path, map_location=device, weights_only=False)
     if isinstance(payload, dict) and "agent" in payload:
         payload = payload["agent"]["actor"]
     actor = ActorNetwork(n_actions, input_dims, alpha=1e-4, device=device)

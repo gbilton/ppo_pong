@@ -102,7 +102,9 @@ if __name__ == "__main__":
         checkpoint_path = os.path.join(run_dir, "checkpoint.pt")
         if not os.path.isfile(checkpoint_path):
             raise SystemExit(f"no checkpoint found at {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = torch.load(
+            checkpoint_path, map_location=device, weights_only=False
+        )
         print(
             f"resuming {run_dir} from step {checkpoint['train_state']['n_steps']:,}"
         )
