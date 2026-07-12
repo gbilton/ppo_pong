@@ -17,7 +17,8 @@ from pong import make
 
 FRAME_SKIP = 4
 SCORE_THRESHOLD = 0.4
-MIN_EPISODES_BETWEEN_PROMOTIONS = 100
+SCORE_WINDOW = 300  # episodes averaged for the promotion gate (fresh policy)
+MIN_EPISODES_BETWEEN_PROMOTIONS = 2000  # spacing keeps pool members distinct
 TRANSITIONS_PER_UPDATE = 4096
 CHECKPOINT_INTERVAL = 50  # updates between periodic checkpoints
 
@@ -248,7 +249,9 @@ if __name__ == "__main__":
     promotions = train_state.get("promotions", 0)
     episodes_done = train_state.get("episodes_done", 0)
     episodes_since_promotion = train_state.get("episodes_since_promotion", 0)
-    score_history = deque(train_state.get("score_history", [-1.0] * 100), maxlen=100)
+    score_history = deque(
+        train_state.get("score_history", [-1.0] * SCORE_WINDOW), maxlen=SCORE_WINDOW
+    )
     avg_scores = train_state.get("avg_scores", [])
 
     def snapshot_train_state(update):
@@ -403,7 +406,7 @@ if __name__ == "__main__":
             champ_path = os.path.join(pool_dir, f"pool_{promotions:03d}.pt")
             torch.save(agent.actor.state_dict(), champ_path)
             pool = load_pool(pool_dir, num_actions, state_size, device)
-            score_history.extend([-1.0] * 100)
+            score_history.extend([-1.0] * SCORE_WINDOW)
             episodes_since_promotion = 0
 
         if promoted or (update + 1) % CHECKPOINT_INTERVAL == 0:
