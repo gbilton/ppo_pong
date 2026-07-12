@@ -71,9 +71,15 @@ matches the tmux server kills every session (this has happened).
   beat actor_goat 10-0. Seed dir: `tmp/docker/goat_v2_seed/`.
 - `run1_gpu/`, `run2_vec/` — earlier run champions (weaker, for tournaments).
 
-## Migrating to a new machine
+## Migrating to a new machine (one step)
 
-1. push/clone this repo; `./bootstrap_vps.sh`
-2. `rsync -a oldbox:~/src/ppo_pong/runs/ runs/` and same for `tmp/`
-3. `./bootstrap_vps.sh start` — resumes runs/latest exactly (same steps,
-   optimizers, pool, TB curves continue in-place)
+The repo carries a snapshot of the live run (`runs/ppo_vec_accel`) and the
+model zoo, so a fresh box needs only:
+
+    curl -fsSL https://raw.githubusercontent.com/gbilton/ppo_pong/main/bootstrap_vps.sh | bash
+
+That clones, installs (CPU torch), and resumes training + tensorboard +
+dashboard in tmux. **Before retiring the old training box**, refresh the
+snapshot from a machine that can reach it: `./snapshot_push.sh [host]`
+(rsyncs state into the repo, commits, pushes). Old runs' full TB histories
+are archived on the Mac at ~/src/personal/ppo_pong/runs (not in git).

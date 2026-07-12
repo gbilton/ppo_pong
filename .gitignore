@@ -3,3 +3,14 @@ venv/
 __pycache__/
 Dockerfile
 .ssh
+# only the live run travels in git (snapshot_push.sh refreshes it);
+# older runs' TB histories are archived off-git
+runs/*
+!runs/latest
+!runs/ppo_vec_accel
+!runs/ppo_vec_accel/**
+tmp/docker/json_files/
+recordings/
+*.log
+episode.mp4
+tmp/mac_play/
