@@ -55,8 +55,10 @@ start() {
         TRAIN_CMD=".venv/bin/python main_vec.py --num-envs 32"
         echo ">> no checkpoint found - starting a fresh run"
     fi
+    # nice -19: on a shared box the other services keep absolute priority;
+    # on a dedicated box it changes nothing
     tmux has-session -t ppo 2>/dev/null || tmux new-session -d -s ppo \
-        "cd $PWD && $TRAIN_CMD >> train_vec.log 2>&1"
+        "cd $PWD && nice -n 19 $TRAIN_CMD >> train_vec.log 2>&1"
     tmux has-session -t tb 2>/dev/null || tmux new-session -d -s tb \
         "while true; do $PWD/.venv/bin/tensorboard --logdir $PWD/runs --port 6006 --load_fast=false >> $PWD/tb.log 2>&1; sleep 3; done"
     tmux has-session -t ui 2>/dev/null || tmux new-session -d -s ui \
