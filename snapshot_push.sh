@@ -4,7 +4,7 @@
 #   ./snapshot_push.sh [training-host]     # default host: fedora
 set -euo pipefail
 cd "$(dirname "$0")"
-HOST="${1:-fedora}"
+HOST="${1:-ppo-vps}"
 
 echo ">> pulling state from $HOST"
 rsync -a "$HOST:~/src/ppo_pong/runs" .
