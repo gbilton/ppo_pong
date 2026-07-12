@@ -288,11 +288,12 @@ def api_tournament_start():
         if len(models) < 2:
             return jsonify({"error": "select at least two models"}), 400
         for m in models:
-            if m in (BOT_TOKEN, "bot"):
+            path = m.partition("::")[0]  # models may carry "path::label"
+            if path in (BOT_TOKEN, "bot"):
                 continue
-            full = os.path.realpath(os.path.join(REPO, m))
+            full = os.path.realpath(os.path.join(REPO, path))
             if not full.startswith(os.path.realpath(REPO)) or not os.path.exists(full):
-                return jsonify({"error": f"bad model path: {m}"}), 400
+                return jsonify({"error": f"bad model path: {path}"}), 400
         _tournament.update(
             {"running": True, "log": "", "results": None, "error": None}
         )
@@ -775,7 +776,8 @@ window.resumeRun=async name=>{
   catch(e){msg("train-msg",e.message)}};
 
 $("btn-tournament").onclick=async()=>{
-  const models=[...document.querySelectorAll("#model-list input:checked")].map(c=>c.value);
+  const models=[...document.querySelectorAll("#model-list input:checked")]
+    .map(c=>c.value+"::"+c.parentElement.textContent.trim());
   try{
     await api("/api/tournament",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({models,points:+$("t-points").value,legs:+$("t-legs").value})});

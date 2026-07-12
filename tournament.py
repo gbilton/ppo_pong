@@ -82,11 +82,13 @@ if __name__ == "__main__":
         )
 
     players = {}
-    for path in args.models:
+    for spec in args.models:
+        # optional explicit display name: "path::My Label"
+        path, _, custom = spec.partition("::")
         if path in ("bot", "__bot__"):
-            name, player = "geometry_bot", PerfectDefender()
+            name, player = custom or "geometry_bot", PerfectDefender()
         else:
-            name = display_name(path)
+            name = custom or display_name(path)
             player = load_policy(
                 path, env.num_actions, (env.state_size,), device=device
             )
