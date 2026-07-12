@@ -289,15 +289,24 @@ def ws_play(ws):
         ws.send(json.dumps({"error": f"bad model: {rel}"}))
         return
     from ppo_torch import load_policy
-    from pong import make
+    from pong import make, Tools
 
     actor = load_policy(full, 3, (7,))
+    opponent = None  # right paddle: human keys, or a second policy (spectate)
+    opp_rel = request.args.get("opponent", "").strip()
+    if opp_rel:
+        opp_full = safe_model_path(opp_rel)
+        if not opp_full:
+            ws.send(json.dumps({"error": f"bad model: {opp_rel}"}))
+            return
+        opponent = load_policy(opp_full, 3, (7,))
     env = make("Pong-v0")
     observation = env.reset()
 
     keys = {"up": False, "down": False}
-    score = [0, 0]  # [human/right, agent/left]
+    score = [0, 0]  # [right (human/opponent), left (agent)]
     agent_action = 2
+    opp_action = 2
     frame = 0
     frame_dt = 1 / 90
     next_t = time.monotonic()
@@ -310,14 +319,19 @@ def ws_play(ws):
                     break
                 keys.update(json.loads(msg))
 
-            if keys["up"]:
-                env.player1.moveup()
-            if keys["down"]:
-                env.player1.movedown()
+            if opponent is None:
+                if keys["up"]:
+                    env.player1.moveup()
+                if keys["down"]:
+                    env.player1.movedown()
             if frame % 4 == 0:  # match training frame-skip
                 agent_action = actor.act(observation)
+                if opponent is not None:
+                    opp_action = opponent.act(Tools.invert(observation))
             frame += 1
-            observation, r1, r2, done = env.step([2, agent_action])
+            observation, r1, r2, done = env.step(
+                [opp_action if opponent is not None else 2, agent_action]
+            )
             if done:
                 if r1 == 1 and r2 == -1:
                     score[0] += 1
@@ -382,31 +396,43 @@ a{color:var(--green);font-size:12px}
 </style>
 </head>
 <body>
-<h1>YOU &nbsp;vs&nbsp; <span id="model-name">MACHINE</span></h1>
-<div class="score"><b id="s-h">0</b> : <b id="s-a">0</b></div>
+<h1 id="title">PONG</h1>
+<div class="score">
+  <span style="font-size:13px;color:var(--dim)" id="n-l"></span>
+  <b id="s-l">0</b> : <b id="s-r">0</b>
+  <span style="font-size:13px;color:var(--dim)" id="n-r"></span>
+</div>
 <canvas id="c" width="800" height="500"></canvas>
 <div id="status">CONNECTING&hellip;</div>
-<div class="hint">&uarr;/&darr; or W/S &mdash; you are the RIGHT paddle</div>
+<div class="hint" id="hint">&uarr;/&darr; or W/S &mdash; you are the RIGHT paddle</div>
 <a href="/">&larr; back to control panel</a>
 <script>
 const params=new URLSearchParams(location.search);
 const model=params.get("model")||"tmp/docker/models";
-document.getElementById("model-name").textContent=model.split("/").slice(-2).join("/");
+const opp=params.get("opponent")||"";
+const short=p=>p.split("/").slice(-2).join("/");
+document.getElementById("n-l").textContent=short(model);
+document.getElementById("n-r").textContent=opp?short(opp):"YOU";
+document.getElementById("title").textContent=opp?"AI EXHIBITION":"YOU vs MACHINE";
+if(opp)document.getElementById("hint").textContent="spectating - left is "+short(model)+", right is "+short(opp);
 const cv=document.getElementById("c"),cx=cv.getContext("2d");
 const status=document.getElementById("status");
 let state=null;
 const proto=location.protocol==="https:"?"wss":"ws";
-const ws=new WebSocket(`${proto}://${location.host}/ws/play?model=${encodeURIComponent(model)}`);
+let url=`${proto}://${location.host}/ws/play?model=${encodeURIComponent(model)}`;
+if(opp)url+=`&opponent=${encodeURIComponent(opp)}`;
+const ws=new WebSocket(url);
 ws.onopen=()=>{status.textContent=""};
 ws.onclose=()=>{status.textContent="DISCONNECTED - refresh to play again"};
 ws.onmessage=e=>{const d=JSON.parse(e.data);
   if(d.error){status.textContent=d.error;ws.close();return}
   state=d;
-  document.getElementById("s-h").textContent=d.s[0];
-  document.getElementById("s-a").textContent=d.s[1];
+  document.getElementById("s-l").textContent=d.s[1];
+  document.getElementById("s-r").textContent=d.s[0];
 };
 const keys={up:false,down:false};
 function setKey(e,val){
+  if(opp)return;
   let hit=true;
   if(e.key==="ArrowUp"||e.key==="w"||e.key==="W")keys.up=val;
   else if(e.key==="ArrowDown"||e.key==="s"||e.key==="S")keys.down=val;
@@ -568,9 +594,11 @@ footer{margin-top:26px;color:var(--dim);font-size:11.5px;letter-spacing:.05em}
 
 <section data-title="PLAY VS HUMAN" style="margin-top:18px">
   <div class="row">
-    <div style="flex:3"><label>OPPONENT MODEL</label>
+    <div style="flex:2"><label>LEFT PADDLE (MODEL)</label>
       <select id="play-model"></select></div>
-    <div><button id="btn-play">&#9658; Play in browser</button></div>
+    <div style="flex:2"><label>RIGHT PADDLE</label>
+      <select id="play-right"><option value="">you (keyboard)</option></select></div>
+    <div><button id="btn-play">&#9658; Play / Watch</button></div>
   </div>
   <pre id="play-cmd"></pre>
   <div style="font-size:11.5px;color:var(--dim)">browser play streams the real game from this box &mdash; or run the command on a machine with a display</div>
@@ -629,14 +657,24 @@ async function refreshModels(){
     $("init-weights").innerHTML='<option value="">fresh random weights</option>'+
       models.filter(m=>!m.endsWith(".pt")&&!m.startsWith("runs/")).map(m=>`<option>${m}</option>`).join("");
     $("play-model").innerHTML=models.map(m=>`<option>${m}</option>`).join("");
+    $("play-right").innerHTML='<option value="">you (keyboard)</option>'+
+      models.map(m=>`<option>${m}</option>`).join("");
     updatePlayCmd();
   }catch(e){}
 }
 function updatePlayCmd(){
-  $("play-cmd").textContent=`cd ~/src/ppo_pong\n.venv/bin/python play.py --model ${$("play-model").value||"..."}`;
+  const right=$("play-right").value;
+  $("play-cmd").textContent=`cd ~/src/ppo_pong\n.venv/bin/python play.py --model ${$("play-model").value||"..."}`+
+    (right?` --opponent ${right}`:"");
 }
 $("play-model").onchange=updatePlayCmd;
-$("btn-play").onclick=()=>window.open("/play?model="+encodeURIComponent($("play-model").value),"_blank");
+$("play-right").onchange=updatePlayCmd;
+$("btn-play").onclick=()=>{
+  let url="/play?model="+encodeURIComponent($("play-model").value);
+  const right=$("play-right").value;
+  if(right)url+="&opponent="+encodeURIComponent(right);
+  window.open(url,"_blank");
+};
 
 $("btn-stop").onclick=async()=>{
   if(!confirm("Stop training? Progress is checkpointed every ~20s."))return;
