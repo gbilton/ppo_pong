@@ -49,9 +49,9 @@ matches the tmux server kills every session (this has happened).
 - **Promotion gate**: mean score over last 300 non-bot episodes >= 0.4, with
   >= 2000 non-bot episodes between promotions (spacing keeps pool members
   distinct). Promotions export to `tmp/docker/models/` and `runs/<run>/pool/`.
-- **Gate != audit.** The honest strength metrics are `eval/vs_ref_*`
-  (deterministic games vs a fixed reference, default actor_goat) and
-  `eval/vs_bot_*` (vs the geometry bot = offense quality), every 200 updates.
+- **Gate != audit.** The honest strength metrics, every 200 updates:
+  `eval/vs_<refname>_*` (deterministic games vs the fixed --eval-ref model,
+  default actor_goat) and `eval/vs_geometry_bot_*` (offense quality).
   Tournaments (dashboard or CLI) are the final judge.
 
 ## Reading TensorBoard (healthy ranges)
@@ -60,7 +60,7 @@ matches the tmux server kills every session (this has happened).
 - `train/clip_fraction` ~0.05-0.2; `train/entropy` ~0.65 (auto-controlled;
   `train/entropy_coef` shows the controller working)
 - `train/explained_variance`: sags at promotions (opponent changes), fine
-- `eval/vs_bot_score` trending up = offense improving (the goal)
+- `eval/vs_geometry_bot_score` trending up = offense improving (the goal)
 - promotions flowing but not >1/min; `episode/length` inflating toward the
   timeout cap = stalemate regime (should not happen since maxvel=22)
 

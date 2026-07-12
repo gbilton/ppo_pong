@@ -5,6 +5,7 @@ import os
 
 import torch
 
+from perfect_bot import PerfectDefender
 from ppo_torch import load_policy
 from pong import make, Tools
 
@@ -82,12 +83,16 @@ if __name__ == "__main__":
 
     players = {}
     for path in args.models:
-        name = display_name(path)
+        if path in ("bot", "__bot__"):
+            name, player = "geometry_bot", PerfectDefender()
+        else:
+            name = display_name(path)
+            player = load_policy(
+                path, env.num_actions, (env.state_size,), device=device
+            )
         if name in players:
             name = f"{name}#{sum(k.startswith(name) for k in players) + 1}"
-        players[name] = load_policy(
-            path, env.num_actions, (env.state_size,), device=device
-        )
+        players[name] = player
     if len(players) < 2:
         raise SystemExit("need at least two distinct models")
 

@@ -3,6 +3,7 @@ import glob
 import json
 import os
 import random
+import re
 import time
 from collections import deque
 from itertools import count
@@ -239,9 +240,12 @@ if __name__ == "__main__":
     eval_envs = [make("Pong-v0") for _ in range(EVAL_ENVS)]
     eval_bot = PerfectDefender()
     eval_ref = None
+    ref_tag = "ref"
     if args.eval_ref and os.path.exists(args.eval_ref):
         eval_ref = load_policy(args.eval_ref, num_actions, (state_size,), device)
-        print(f"eval reference: {args.eval_ref}")
+        # tag carries the reference's actual name, e.g. eval/vs_actor_goat_winrate
+        ref_tag = re.sub(r"[^A-Za-z0-9]+", "_", os.path.basename(args.eval_ref))
+        print(f"eval reference: {args.eval_ref} (tag eval/vs_{ref_tag}_*)")
 
     train_state = checkpoint["train_state"] if checkpoint else {}
     n_steps = train_state.get("n_steps", 0)
@@ -371,17 +375,19 @@ if __name__ == "__main__":
             if eval_ref is not None:
                 results = evaluate_vs_ref(agent, eval_ref, eval_envs)
                 for key, value in results.items():
-                    writer.add_scalar(f"eval/vs_ref_{key}", value, n_steps)
+                    writer.add_scalar(f"eval/vs_{ref_tag}_{key}", value, n_steps)
                 print(
-                    f"\neval vs ref @ {n_steps:,}: winrate {results['winrate']:.2f} "
+                    f"\neval vs {ref_tag} @ {n_steps:,}: "
+                    f"winrate {results['winrate']:.2f} "
                     f"score {results['score']:+.2f} "
                     f"timeouts {results['timeout_frac']:.2f}"
                 )
             bot_results = evaluate_vs_ref(agent, eval_bot, eval_envs)
             for key, value in bot_results.items():
-                writer.add_scalar(f"eval/vs_bot_{key}", value, n_steps)
+                writer.add_scalar(f"eval/vs_geometry_bot_{key}", value, n_steps)
             print(
-                f"eval vs bot @ {n_steps:,}: winrate {bot_results['winrate']:.2f} "
+                f"eval vs geometry_bot @ {n_steps:,}: "
+                f"winrate {bot_results['winrate']:.2f} "
                 f"score {bot_results['score']:+.2f} "
                 f"timeouts {bot_results['timeout_frac']:.2f}"
             )

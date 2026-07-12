@@ -173,6 +173,18 @@ def load_policy(path, n_actions, input_dims, device=torch.device("cpu")):
     payload = torch.load(path, map_location=device, weights_only=False)
     if isinstance(payload, dict) and "agent" in payload:
         payload = payload["agent"]["actor"]
+    if isinstance(payload, dict) and "out.weight" in payload:
+        # legacy DQN net (6 inputs, tanh); its act() drops the timestep itself
+        from pong import DQN
+
+        dqn = DQN(
+            input_size=payload["fc1.weight"].shape[1],
+            output_size=payload["out.weight"].shape[0],
+            device=device,
+        )
+        dqn.load_state_dict(payload)
+        dqn.eval()
+        return dqn
     actor = ActorNetwork(n_actions, input_dims, alpha=1e-4, device=device)
     actor.load_state_dict(payload)
     actor.eval()

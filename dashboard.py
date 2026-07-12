@@ -141,22 +141,59 @@ def api_runs():
     return jsonify(runs)
 
 
+BOT_TOKEN = "__bot__"
+
+LABELS = {
+    "tmp/docker/legacy_models/actor_goat": "GOAT v1 — historic champion",
+    "tmp/docker/legacy_models/actor_goat_v2": "GOAT v2 — dethroned v1 10-0",
+    "tmp/docker/legacy_models/run1_gpu": "run1_gpu — day-1 champion",
+    "tmp/docker/legacy_models/run2_vec": "run2_vec — vectorized-era champion",
+}
+
+
 @app.get("/api/models")
 def api_models():
-    models = []
-    for d in ["tmp/docker/models", "tmp/docker/goat_seed"]:
-        if os.path.isdir(os.path.join(REPO, d)):
-            models.append(d)
+    models = [
+        {"path": BOT_TOKEN, "label": "Geometry Bot — scripted perfect defender"}
+    ]
+    latest_ckpt = os.path.join(REPO, "runs/latest/checkpoint.pt")
+    if os.path.isfile(latest_ckpt):
+        models.append(
+            {"path": "runs/latest/checkpoint.pt", "label": "Live Agent — training now"}
+        )
+    if os.path.isdir(os.path.join(REPO, "tmp/docker/models")):
+        models.append(
+            {"path": "tmp/docker/models", "label": "Champion — last promoted"}
+        )
+    if os.path.isfile(os.path.join(REPO, "tmp/dqn/model100x3.pth")):
+        models.append(
+            {"path": "tmp/dqn/model100x3.pth", "label": "DQN — pre-PPO era rival"}
+        )
     for f in sorted(glob.glob(os.path.join(REPO, "tmp/docker/legacy_models/*"))):
+        rel = os.path.relpath(f, REPO)
         name = os.path.basename(f)
-        if name.startswith("actor") and "copy" not in name:
-            models.append(os.path.relpath(f, REPO))
-    for d in sorted(glob.glob(os.path.join(REPO, "tmp/docker/legacy_models/*/"))):
-        if glob.glob(os.path.join(d, "actor*")):
-            models.append(os.path.relpath(d.rstrip("/"), REPO))
+        if os.path.isdir(f) and glob.glob(os.path.join(f, "actor*")):
+            models.append({"path": rel, "label": LABELS.get(rel, name)})
+        elif name.startswith("actor") and "copy" not in name:
+            models.append({"path": rel, "label": LABELS.get(rel, name)})
+    latest_real = os.path.realpath(latest_ckpt)
     for f in sorted(glob.glob(os.path.join(REPO, "runs/*/checkpoint.pt"))):
-        models.append(os.path.relpath(f, REPO))
-    return jsonify(models)
+        if os.path.realpath(f) == latest_real:
+            continue  # duplicate of Live Agent
+        run = os.path.basename(os.path.dirname(f))
+        models.append(
+            {"path": os.path.relpath(f, REPO), "label": f"{run} — checkpoint"}
+        )
+    seeds = []
+    for d in ["tmp/docker/models", "tmp/docker/goat_seed", "tmp/docker/goat_v2_seed"]:
+        if os.path.isdir(os.path.join(REPO, d)):
+            label = {
+                "tmp/docker/models": "last promoted champion",
+                "tmp/docker/goat_seed": "goat v1 weights",
+                "tmp/docker/goat_v2_seed": "goat v2 weights",
+            }[d]
+            seeds.append({"path": d, "label": label})
+    return jsonify({"models": models, "seeds": seeds})
 
 
 @app.post("/api/train/start")
@@ -251,6 +288,8 @@ def api_tournament_start():
         if len(models) < 2:
             return jsonify({"error": "select at least two models"}), 400
         for m in models:
+            if m in (BOT_TOKEN, "bot"):
+                continue
             full = os.path.realpath(os.path.join(REPO, m))
             if not full.startswith(os.path.realpath(REPO)) or not os.path.exists(full):
                 return jsonify({"error": f"bad model path: {m}"}), 400
@@ -283,23 +322,30 @@ def safe_model_path(rel):
 @sock.route("/ws/play")
 def ws_play(ws):
     """Authoritative game loop: real env + real policy, browser is the screen."""
-    rel = request.args.get("model", "tmp/docker/models")
-    full = safe_model_path(rel)
-    if not full:
-        ws.send(json.dumps({"error": f"bad model: {rel}"}))
-        return
+    from perfect_bot import PerfectDefender
     from ppo_torch import load_policy
     from pong import make, Tools
 
-    actor = load_policy(full, 3, (7,))
+    def load_player(rel):
+        if rel in (BOT_TOKEN, "bot"):
+            return PerfectDefender()
+        full = safe_model_path(rel)
+        if not full:
+            return None
+        return load_policy(full, 3, (7,))
+
+    rel = request.args.get("model", "tmp/docker/models")
+    actor = load_player(rel)
+    if actor is None:
+        ws.send(json.dumps({"error": f"bad model: {rel}"}))
+        return
     opponent = None  # right paddle: human keys, or a second policy (spectate)
     opp_rel = request.args.get("opponent", "").strip()
     if opp_rel:
-        opp_full = safe_model_path(opp_rel)
-        if not opp_full:
+        opponent = load_player(opp_rel)
+        if opponent is None:
             ws.send(json.dumps({"error": f"bad model: {opp_rel}"}))
             return
-        opponent = load_policy(opp_full, 3, (7,))
     env = make("Pong-v0")
     observation = env.reset()
 
@@ -410,7 +456,7 @@ a{color:var(--green);font-size:12px}
 const params=new URLSearchParams(location.search);
 const model=params.get("model")||"tmp/docker/models";
 const opp=params.get("opponent")||"";
-const short=p=>p.split("/").slice(-2).join("/");
+const short=p=>p==="__bot__"?"GEOMETRY BOT":p.split("/").slice(-2).join("/");
 document.getElementById("n-l").textContent=short(model);
 document.getElementById("n-r").textContent=opp?short(opp):"YOU";
 document.getElementById("title").textContent=opp?"AI EXHIBITION":"YOU vs MACHINE";
@@ -682,14 +728,15 @@ async function refreshRuns(){
 
 async function refreshModels(){
   try{
-    const models=await api("/api/models");
-    $("model-list").innerHTML=models.map(m=>
-      `<label><input type="checkbox" value="${m}">${m}</label>`).join("");
+    const d=await api("/api/models");
+    const opt=m=>`<option value="${m.path}">${m.label}</option>`;
+    $("model-list").innerHTML=d.models.map(m=>
+      `<label><input type="checkbox" value="${m.path}">${m.label}</label>`).join("");
     $("init-weights").innerHTML='<option value="">fresh random weights</option>'+
-      models.filter(m=>!m.endsWith(".pt")&&!m.startsWith("runs/")).map(m=>`<option>${m}</option>`).join("");
-    $("play-model").innerHTML=models.map(m=>`<option>${m}</option>`).join("");
+      d.seeds.map(opt).join("");
+    $("play-model").innerHTML=d.models.map(opt).join("");
     $("play-right").innerHTML='<option value="">you (keyboard)</option>'+
-      models.map(m=>`<option>${m}</option>`).join("");
+      d.models.map(opt).join("");
   }catch(e){}
 }
 $("btn-all").onclick=()=>{
