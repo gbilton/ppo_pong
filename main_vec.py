@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from perfect_bot import PerfectDefender
 from ppo_torch import Agent, load_policy
 from pong import make
 
@@ -21,10 +22,14 @@ TRANSITIONS_PER_UPDATE = 4096
 CHECKPOINT_INTERVAL = 50  # updates between periodic checkpoints
 
 # opponent pool: play the newest champion most, but never forget the anchor
-# (the run's origin) or past champions - prevents self-play cycling
+# (the run's origin) or past champions - prevents self-play cycling.
+# the scripted geometry bot gets a fixed share: it only concedes to
+# objectively hard shots, so its reward signal is pure offense quality.
 POOL_MAX = 20
-P_LATEST = 0.5
+P_BOT = 0.15
+P_LATEST = 0.5  # of the non-bot share
 P_ANCHOR = 0.25
+BOT_IDX = -1
 
 # fixed-reference evaluation: deterministic games vs an external yardstick,
 # logged as eval/* - the honest strength curve that promotions can't fake
@@ -115,6 +120,9 @@ def load_pool(pool_dir, num_actions, state_size, device):
 
 def sample_opponent(pool_size):
     r = random.random()
+    if r < P_BOT:
+        return BOT_IDX
+    r = (r - P_BOT) / (1 - P_BOT)
     if r < P_LATEST or pool_size == 1:
         return pool_size - 1
     if r < P_LATEST + P_ANCHOR or pool_size == 2:
@@ -227,11 +235,11 @@ if __name__ == "__main__":
     pool = load_pool(pool_dir, num_actions, state_size, device)
     print(f"opponent pool: {len(pool)} member(s)")
 
+    eval_envs = [make("Pong-v0") for _ in range(EVAL_ENVS)]
+    eval_bot = PerfectDefender()
     eval_ref = None
-    eval_envs = []
     if args.eval_ref and os.path.exists(args.eval_ref):
         eval_ref = load_policy(args.eval_ref, num_actions, (state_size,), device)
-        eval_envs = [make("Pong-v0") for _ in range(EVAL_ENVS)]
         print(f"eval reference: {args.eval_ref}")
 
     train_state = checkpoint["train_state"] if checkpoint else {}
@@ -287,7 +295,8 @@ if __name__ == "__main__":
             bot_actions = np.full(num_envs, 2, dtype=np.int64)
             for idx in set(env_opp.tolist()):
                 mask = env_opp == idx
-                bot_actions[mask] = pool[idx].act_batch(inverted[mask])
+                opponent = eval_bot if idx == BOT_IDX else pool[idx]
+                bot_actions[mask] = opponent.act_batch(inverted[mask])
 
             states_buf[t] = observations
             actions_buf[t] = actions
@@ -306,10 +315,13 @@ if __name__ == "__main__":
                 ep_scores[k] += reward
                 ep_lengths[k] += 1
                 if done:
-                    score_history.append(ep_scores[k])
+                    # bot episodes are a curriculum, not a fair gate: the
+                    # promotion score only counts learned opponents
+                    if env_opp[k] != BOT_IDX:
+                        score_history.append(ep_scores[k])
+                        episodes_since_promotion += 1
                     recent_lengths.append(ep_lengths[k])
                     episodes_done += 1
-                    episodes_since_promotion += 1
                     ep_scores[k] = 0.0
                     ep_lengths[k] = 0
                     # env auto-resets inside step(); fresh state, fresh opponent
@@ -352,13 +364,23 @@ if __name__ == "__main__":
         writer.add_scalar("selfplay/pool_size", len(pool), n_steps)
         writer.add_scalar("perf/steps_per_sec", steps_per_sec, n_steps)
 
-        if eval_ref is not None and (update + 1) % EVAL_INTERVAL == 0:
-            results = evaluate_vs_ref(agent, eval_ref, eval_envs)
-            for key, value in results.items():
-                writer.add_scalar(f"eval/vs_ref_{key}", value, n_steps)
+        if (update + 1) % EVAL_INTERVAL == 0:
+            if eval_ref is not None:
+                results = evaluate_vs_ref(agent, eval_ref, eval_envs)
+                for key, value in results.items():
+                    writer.add_scalar(f"eval/vs_ref_{key}", value, n_steps)
+                print(
+                    f"\neval vs ref @ {n_steps:,}: winrate {results['winrate']:.2f} "
+                    f"score {results['score']:+.2f} "
+                    f"timeouts {results['timeout_frac']:.2f}"
+                )
+            bot_results = evaluate_vs_ref(agent, eval_bot, eval_envs)
+            for key, value in bot_results.items():
+                writer.add_scalar(f"eval/vs_bot_{key}", value, n_steps)
             print(
-                f"\neval vs ref @ {n_steps:,}: winrate {results['winrate']:.2f} "
-                f"score {results['score']:+.2f} timeouts {results['timeout_frac']:.2f}"
+                f"eval vs bot @ {n_steps:,}: winrate {bot_results['winrate']:.2f} "
+                f"score {bot_results['score']:+.2f} "
+                f"timeouts {bot_results['timeout_frac']:.2f}"
             )
 
         if (update + 1) % 25 == 0:
