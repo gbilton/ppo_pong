@@ -417,16 +417,25 @@ document.getElementById("title").textContent=opp?"AI EXHIBITION":"YOU vs MACHINE
 if(opp)document.getElementById("hint").textContent="spectating - left is "+short(model)+", right is "+short(opp);
 const cv=document.getElementById("c"),cx=cv.getContext("2d");
 const status=document.getElementById("status");
-let state=null;
 const proto=location.protocol==="https:"?"wss":"ws";
 let url=`${proto}://${location.host}/ws/play?model=${encodeURIComponent(model)}`;
 if(opp)url+=`&opponent=${encodeURIComponent(opp)}`;
 const ws=new WebSocket(url);
 ws.onopen=()=>{status.textContent=""};
 ws.onclose=()=>{status.textContent="DISCONNECTED - refresh to play again"};
+
+// --- latency compensation ---------------------------------------------
+// own paddle: client-side prediction (same physics as the server: 5 px per
+// 1/90s tick, clamped) so input feels instant despite the round-trip;
+// gently reconciled toward the authoritative position on every message.
+// ball + opponent: rendered interpolated between the last two server states,
+// hiding network jitter at the cost of ~one frame of visual delay.
+const SPEED=5,PADDLE_H=56,COURT_H=500,TICK=1000/90;
+let cur=null,prev=null,predP1=null,lastTick=performance.now();
 ws.onmessage=e=>{const d=JSON.parse(e.data);
   if(d.error){status.textContent=d.error;ws.close();return}
-  state=d;
+  prev=cur;cur={p1:d.p1,p2:d.p2,bx:d.bx,by:d.by,t:performance.now()};
+  if(predP1===null)predP1=d.p1;else predP1+=(d.p1-predP1)*0.12;
   document.getElementById("s-l").textContent=d.s[1];
   document.getElementById("s-r").textContent=d.s[0];
 };
@@ -441,16 +450,35 @@ function setKey(e,val){
 }
 addEventListener("keydown",e=>{if(!e.repeat)setKey(e,true)});
 addEventListener("keyup",e=>setKey(e,false));
+function stepPrediction(now){
+  if(opp||predP1===null){lastTick=now;return}
+  while(now-lastTick>=TICK){
+    if(keys.up)predP1=Math.max(0,predP1-SPEED);
+    if(keys.down)predP1=Math.min(COURT_H-PADDLE_H,predP1+SPEED);
+    lastTick+=TICK;
+  }
+}
+const lerp=(a,b,t)=>a+(b-a)*t;
 function draw(){
   requestAnimationFrame(draw);
+  const now=performance.now();
+  stepPrediction(now);
   cx.fillStyle="#06130a";cx.fillRect(0,0,800,500);
   cx.strokeStyle="rgba(87,242,135,.25)";cx.setLineDash([6,10]);
   cx.beginPath();cx.moveTo(400,0);cx.lineTo(400,500);cx.stroke();cx.setLineDash([]);
-  if(!state)return;
+  if(!cur)return;
+  let bx=cur.bx,by=cur.by,p2=cur.p2,p1srv=cur.p1;
+  if(prev&&Math.abs(cur.bx-prev.bx)<80){ // skip lerp across point resets
+    const span=Math.max(1,cur.t-prev.t);
+    const a=Math.min(1,(now-cur.t)/span);
+    bx=lerp(prev.bx,cur.bx,a);by=lerp(prev.by,cur.by,a);
+    p2=lerp(prev.p2,cur.p2,a);p1srv=lerp(prev.p1,cur.p1,a);
+  }
+  const p1=(opp||predP1===null)?p1srv:predP1;
   cx.shadowColor="#57f287";cx.shadowBlur=12;cx.fillStyle="#57f287";
-  cx.fillRect(50,state.p2,10,56);          // agent - left
-  cx.fillRect(800-50-10,state.p1,10,56);   // you - right
-  cx.beginPath();cx.arc(state.bx,state.by,6,0,7);cx.fill();
+  cx.fillRect(50,p2,10,56);          // left paddle
+  cx.fillRect(800-50-10,p1,10,56);   // right paddle (you: predicted)
+  cx.beginPath();cx.arc(bx,by,6,0,7);cx.fill();
   cx.shadowBlur=0;
 }
 draw();
@@ -574,11 +602,13 @@ footer{margin-top:26px;color:var(--dim);font-size:11.5px;letter-spacing:.05em}
 </section>
 
 <section data-title="TOURNAMENT">
-  <label>COMBATANTS (PICK 2+)</label>
+  <label>COMBATANTS (PICK 2+)
+    <button id="btn-all" style="padding:2px 8px;font-size:10px;margin-left:8px">select all</button>
+  </label>
   <div class="models" id="model-list"></div>
   <div class="row" style="margin-top:10px">
-    <div><label>POINTS / LEG</label><input id="t-points" type="number" value="5"></div>
-    <div><label>LEGS</label><input id="t-legs" type="number" value="2"></div>
+    <div><label style="cursor:help" title="Points needed to win one leg (a game). First model to score this many points takes the leg.">POINTS / LEG &#9432;</label><input id="t-points" type="number" value="5"></div>
+    <div><label style="cursor:help" title="How many games each pairing plays. Sides swap every leg to cancel any side advantage; the aggregate score decides the match.">LEGS &#9432;</label><input id="t-legs" type="number" value="2"></div>
     <div><button id="btn-tournament">&#9876; Fight</button></div>
   </div>
   <div class="msg" id="t-msg"></div>
@@ -600,8 +630,7 @@ footer{margin-top:26px;color:var(--dim);font-size:11.5px;letter-spacing:.05em}
       <select id="play-right"><option value="">you (keyboard)</option></select></div>
     <div><button id="btn-play">&#9658; Play / Watch</button></div>
   </div>
-  <pre id="play-cmd"></pre>
-  <div style="font-size:11.5px;color:var(--dim)">browser play streams the real game from this box &mdash; or run the command on a machine with a display</div>
+  <div style="font-size:11.5px;color:var(--dim)">streams the real game from this box &mdash; opens in a new tab</div>
 </section>
 
 <footer>
@@ -612,6 +641,7 @@ footer{margin-top:26px;color:var(--dim);font-size:11.5px;letter-spacing:.05em}
 <script>
 const $=id=>document.getElementById(id);
 const fmt=n=>n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"k":n;
+let trainingActive=false;
 async function api(path,opts){const r=await fetch(path,opts);const j=await r.json();
   if(!r.ok)throw new Error(j.error||r.statusText);return j}
 function msg(id,text,ok){const el=$(id);el.textContent=text;el.className="msg "+(ok?"ok":"err");
@@ -633,6 +663,7 @@ async function refreshStatus(){
     $("btn-stop").disabled=!s.training;
     $("btn-resume").disabled=s.training;
     $("btn-start").disabled=s.training;
+    if(trainingActive!==s.training){trainingActive=s.training;refreshRuns()}
   }catch(e){}
 }
 
@@ -644,7 +675,7 @@ async function refreshRuns(){
       return `<tr><td>${r.name} ${r.is_latest?'<span class="tag">LATEST</span>':""}</td>
         <td>${s.steps!==undefined?fmt(s.steps):"--"}</td>
         <td>${s.promotions??"--"}</td><td>${r.updated}</td>
-        <td>${r.resumable?`<button onclick="resumeRun('${r.name}')">resume</button>`:""}</td></tr>`;
+        <td>${r.is_latest&&trainingActive?'<span style="color:var(--green);font-size:11px">&#9679; running</span>':r.resumable&&!trainingActive?`<button onclick="resumeRun('${r.name}')">resume</button>`:""}</td></tr>`;
     }).join("");
   }catch(e){}
 }
@@ -659,16 +690,13 @@ async function refreshModels(){
     $("play-model").innerHTML=models.map(m=>`<option>${m}</option>`).join("");
     $("play-right").innerHTML='<option value="">you (keyboard)</option>'+
       models.map(m=>`<option>${m}</option>`).join("");
-    updatePlayCmd();
   }catch(e){}
 }
-function updatePlayCmd(){
-  const right=$("play-right").value;
-  $("play-cmd").textContent=`cd ~/src/ppo_pong\n.venv/bin/python play.py --model ${$("play-model").value||"..."}`+
-    (right?` --opponent ${right}`:"");
-}
-$("play-model").onchange=updatePlayCmd;
-$("play-right").onchange=updatePlayCmd;
+$("btn-all").onclick=()=>{
+  const boxes=[...document.querySelectorAll("#model-list input")];
+  const all=boxes.every(b=>b.checked);
+  boxes.forEach(b=>b.checked=!all);
+};
 $("btn-play").onclick=()=>{
   let url="/play?model="+encodeURIComponent($("play-model").value);
   const right=$("play-right").value;
