@@ -18,6 +18,7 @@ import threading
 import time
 
 from flask import Flask, jsonify, request
+from flask_sock import Sock
 
 PORT = 8787
 REPO = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +28,7 @@ TB_SESSION = "tb"
 TRAIN_LOG = os.path.join(REPO, "train_vec.log")
 
 app = Flask(__name__)
+sock = Sock(app)
 
 _ckpt_cache = {}
 _tournament = {"running": False, "log": "", "results": None, "error": None}
@@ -269,9 +271,166 @@ def api_tournament_status():
         return jsonify(_tournament)
 
 
+def safe_model_path(rel):
+    full = os.path.realpath(os.path.join(REPO, rel))
+    if not full.startswith(os.path.realpath(REPO) + os.sep) or not os.path.exists(
+        full
+    ):
+        return None
+    return full
+
+
+@sock.route("/ws/play")
+def ws_play(ws):
+    """Authoritative game loop: real env + real policy, browser is the screen."""
+    rel = request.args.get("model", "tmp/docker/models")
+    full = safe_model_path(rel)
+    if not full:
+        ws.send(json.dumps({"error": f"bad model: {rel}"}))
+        return
+    from ppo_torch import load_policy
+    from pong import make
+
+    actor = load_policy(full, 3, (7,))
+    env = make("Pong-v0")
+    observation = env.reset()
+
+    keys = {"up": False, "down": False}
+    score = [0, 0]  # [human/right, agent/left]
+    agent_action = 2
+    frame = 0
+    frame_dt = 1 / 90
+    next_t = time.monotonic()
+
+    try:
+        while True:
+            while True:  # drain pending key events
+                msg = ws.receive(timeout=0)
+                if msg is None:
+                    break
+                keys.update(json.loads(msg))
+
+            if keys["up"]:
+                env.player1.moveup()
+            if keys["down"]:
+                env.player1.movedown()
+            if frame % 4 == 0:  # match training frame-skip
+                agent_action = actor.act(observation)
+            frame += 1
+            observation, r1, r2, done = env.step([2, agent_action])
+            if done:
+                if r1 == 1 and r2 == -1:
+                    score[0] += 1
+                elif r2 == 1 and r1 == -1:
+                    score[1] += 1
+
+            ws.send(
+                json.dumps(
+                    {
+                        "p1": env.player1.y,
+                        "p2": env.player2.y,
+                        "bx": env.ball.x,
+                        "by": env.ball.y,
+                        "s": score,
+                    }
+                )
+            )
+            next_t += frame_dt
+            delay = next_t - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                next_t = time.monotonic()
+    except Exception:
+        return
+
+
+@app.get("/play")
+def play_page():
+    return PLAY_PAGE
+
+
 @app.get("/")
 def index():
     return PAGE
+
+
+PLAY_PAGE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PONG // VS MACHINE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0d0b;--txt:#c8d6cc;--dim:#5f7368;--green:#57f287;--amber:#f2c94c;
+  --glow:0 0 8px rgba(87,242,135,.45)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--txt);font:14px "IBM Plex Mono",monospace;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;padding:20px;
+  background-image:radial-gradient(ellipse 90% 60% at 50% -10%,rgba(87,242,135,.05),transparent)}
+h1{font-family:"Chakra Petch",sans-serif;font-size:20px;letter-spacing:.16em;
+  color:var(--green);text-shadow:var(--glow)}
+.score{font-family:"Chakra Petch",sans-serif;font-size:34px;letter-spacing:.3em;color:var(--txt)}
+.score b{color:var(--green)}
+canvas{border:1px solid #31473a;box-shadow:0 0 30px rgba(87,242,135,.12);
+  max-width:96vw;height:auto;image-rendering:pixelated}
+.hint{color:var(--dim);font-size:12px;letter-spacing:.1em}
+#status{font-size:12px;color:var(--amber);min-height:16px;letter-spacing:.15em}
+a{color:var(--green);font-size:12px}
+</style>
+</head>
+<body>
+<h1>YOU &nbsp;vs&nbsp; <span id="model-name">MACHINE</span></h1>
+<div class="score"><b id="s-h">0</b> : <b id="s-a">0</b></div>
+<canvas id="c" width="800" height="500"></canvas>
+<div id="status">CONNECTING&hellip;</div>
+<div class="hint">&uarr;/&darr; or W/S &mdash; you are the RIGHT paddle</div>
+<a href="/">&larr; back to control panel</a>
+<script>
+const params=new URLSearchParams(location.search);
+const model=params.get("model")||"tmp/docker/models";
+document.getElementById("model-name").textContent=model.split("/").slice(-2).join("/");
+const cv=document.getElementById("c"),cx=cv.getContext("2d");
+const status=document.getElementById("status");
+let state=null;
+const proto=location.protocol==="https:"?"wss":"ws";
+const ws=new WebSocket(`${proto}://${location.host}/ws/play?model=${encodeURIComponent(model)}`);
+ws.onopen=()=>{status.textContent=""};
+ws.onclose=()=>{status.textContent="DISCONNECTED - refresh to play again"};
+ws.onmessage=e=>{const d=JSON.parse(e.data);
+  if(d.error){status.textContent=d.error;ws.close();return}
+  state=d;
+  document.getElementById("s-h").textContent=d.s[0];
+  document.getElementById("s-a").textContent=d.s[1];
+};
+const keys={up:false,down:false};
+function setKey(e,val){
+  let hit=true;
+  if(e.key==="ArrowUp"||e.key==="w"||e.key==="W")keys.up=val;
+  else if(e.key==="ArrowDown"||e.key==="s"||e.key==="S")keys.down=val;
+  else hit=false;
+  if(hit){e.preventDefault();if(ws.readyState===1)ws.send(JSON.stringify(keys))}
+}
+addEventListener("keydown",e=>{if(!e.repeat)setKey(e,true)});
+addEventListener("keyup",e=>setKey(e,false));
+function draw(){
+  requestAnimationFrame(draw);
+  cx.fillStyle="#06130a";cx.fillRect(0,0,800,500);
+  cx.strokeStyle="rgba(87,242,135,.25)";cx.setLineDash([6,10]);
+  cx.beginPath();cx.moveTo(400,0);cx.lineTo(400,500);cx.stroke();cx.setLineDash([]);
+  if(!state)return;
+  cx.shadowColor="#57f287";cx.shadowBlur=12;cx.fillStyle="#57f287";
+  cx.fillRect(50,state.p2,10,56);          // agent - left
+  cx.fillRect(800-50-10,state.p1,10,56);   // you - right
+  cx.beginPath();cx.arc(state.bx,state.by,6,0,7);cx.fill();
+  cx.shadowBlur=0;
+}
+draw();
+</script>
+</body>
+</html>"""
 
 
 PAGE = r"""<!doctype html>
@@ -411,9 +570,10 @@ footer{margin-top:26px;color:var(--dim);font-size:11.5px;letter-spacing:.05em}
   <div class="row">
     <div style="flex:3"><label>OPPONENT MODEL</label>
       <select id="play-model"></select></div>
+    <div><button id="btn-play">&#9658; Play in browser</button></div>
   </div>
   <pre id="play-cmd"></pre>
-  <div style="font-size:11.5px;color:var(--dim)">run this in a terminal on the machine with the display &mdash; arrow keys, right paddle</div>
+  <div style="font-size:11.5px;color:var(--dim)">browser play streams the real game from this box &mdash; or run the command on a machine with a display</div>
 </section>
 
 <footer>
@@ -476,6 +636,7 @@ function updatePlayCmd(){
   $("play-cmd").textContent=`cd ~/src/ppo_pong\n.venv/bin/python play.py --model ${$("play-model").value||"..."}`;
 }
 $("play-model").onchange=updatePlayCmd;
+$("btn-play").onclick=()=>window.open("/play?model="+encodeURIComponent($("play-model").value),"_blank");
 
 $("btn-stop").onclick=async()=>{
   if(!confirm("Stop training? Progress is checkpointed every ~20s."))return;
