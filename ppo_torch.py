@@ -191,7 +191,7 @@ class Agent:
         policy_clip=0.2,
         batch_size=64,
         n_epochs=10,
-        entropy_coef=0.018,
+        entropy_coef=0.013,
         max_grad_norm=0.5,
         target_kl=0.05,
         device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
