@@ -192,6 +192,8 @@ class Agent:
         batch_size=64,
         n_epochs=10,
         entropy_coef=0.013,
+        entropy_target=0.65,
+        entropy_adapt_rate=0.03,
         max_grad_norm=0.5,
         target_kl=0.05,
         device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
@@ -201,6 +203,10 @@ class Agent:
         self.n_epochs = n_epochs
         self.gae_lambda = gae_lambda
         self.entropy_coef = entropy_coef
+        # auto-tune entropy_coef so policy entropy tracks entropy_target
+        # (set entropy_target=None for a fixed coefficient)
+        self.entropy_target = entropy_target
+        self.entropy_adapt_rate = entropy_adapt_rate
         self.max_grad_norm = max_grad_norm
         self.target_kl = target_kl
 
@@ -228,6 +234,7 @@ class Agent:
             "critic": self.critic.state_dict(),
             "actor_optimizer": self.actor.optimizer.state_dict(),
             "critic_optimizer": self.critic.optimizer.state_dict(),
+            "entropy_coef": self.entropy_coef,
         }
 
     def load_checkpoint_state(self, ckpt):
@@ -235,6 +242,7 @@ class Agent:
         self.critic.load_state_dict(ckpt["critic"])
         self.actor.optimizer.load_state_dict(ckpt["actor_optimizer"])
         self.critic.optimizer.load_state_dict(ckpt["critic_optimizer"])
+        self.entropy_coef = ckpt.get("entropy_coef", self.entropy_coef)
 
     def choose_action(self, observation):
         state = torch.tensor(observation, dtype=torch.float).to(self.actor.device)
@@ -465,7 +473,19 @@ class Agent:
                     stop = True  # policy moved too far; skip remaining epochs
                     break
 
+        if self.entropy_target is not None and entropies:
+            # proportional controller: entropy above target -> weaken the bonus
+            error = self.entropy_target - float(np.mean(entropies))
+            self.entropy_coef = float(
+                np.clip(
+                    self.entropy_coef * np.exp(self.entropy_adapt_rate * error),
+                    1e-4,
+                    0.1,
+                )
+            )
+
         return {
+            "entropy_coef": self.entropy_coef,
             "epochs_used": float(epochs_used),
             "actor_loss": float(np.mean(actor_losses)),
             "critic_loss": float(np.mean(critic_losses)),
