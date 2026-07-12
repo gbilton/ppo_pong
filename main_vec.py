@@ -1,6 +1,8 @@
 import argparse
+import glob
 import json
 import os
+import random
 import time
 from collections import deque
 from itertools import count
@@ -9,7 +11,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from ppo_torch import Agent
+from ppo_torch import Agent, load_policy
 from pong import make
 
 FRAME_SKIP = 4
@@ -17,6 +19,18 @@ SCORE_THRESHOLD = 0.4
 MIN_EPISODES_BETWEEN_PROMOTIONS = 100
 TRANSITIONS_PER_UPDATE = 4096
 CHECKPOINT_INTERVAL = 50  # updates between periodic checkpoints
+
+# opponent pool: play the newest champion most, but never forget the anchor
+# (the run's origin) or past champions - prevents self-play cycling
+POOL_MAX = 20
+P_LATEST = 0.5
+P_ANCHOR = 0.25
+
+# fixed-reference evaluation: deterministic games vs an external yardstick,
+# logged as eval/* - the honest strength curve that promotions can't fake
+EVAL_INTERVAL = int(os.getenv("EVAL_INTERVAL", "200"))  # updates
+EVAL_EPISODES = 32
+EVAL_ENVS = 8
 
 
 def parse_args():
@@ -48,6 +62,12 @@ def parse_args():
         help="start a NEW run but initialize agent and opponent from "
         "actor/critic checkpoint files in MODEL_DIR (fresh optimizers/counters)",
     )
+    parser.add_argument(
+        "--eval-ref",
+        default="tmp/docker/legacy_models/actor_goat",
+        metavar="MODEL",
+        help="fixed reference model for eval/* metrics (skip if missing)",
+    )
     args = parser.parse_args()
     if args.resume and (args.run_name or args.init_weights):
         parser.error("--resume cannot be combined with --run-name/--init-weights")
@@ -72,15 +92,67 @@ def update_latest_symlink(run_dir):
         os.symlink(os.path.basename(os.path.normpath(run_dir)), link)
 
 
-def save_checkpoint(run_dir, agent, agent1, train_state):
+def save_checkpoint(run_dir, agent, latest_opponent, train_state):
     path = os.path.join(run_dir, "checkpoint.pt")
     checkpoint = {
         "agent": agent.get_checkpoint(),
-        "opponent_actor": agent1.actor.state_dict(),
+        "opponent_actor": latest_opponent.state_dict(),
         "train_state": train_state,
     }
     torch.save(checkpoint, path + ".tmp")
     os.replace(path + ".tmp", path)
+
+
+def load_pool(pool_dir, num_actions, state_size, device):
+    """Anchor (pool_000) plus the most recent POOL_MAX-1 champions."""
+    files = sorted(glob.glob(os.path.join(pool_dir, "pool_*.pt")))
+    if len(files) > POOL_MAX:
+        files = [files[0]] + files[-(POOL_MAX - 1) :]
+    return [
+        load_policy(f, num_actions, (state_size,), device=device) for f in files
+    ]
+
+
+def sample_opponent(pool_size):
+    r = random.random()
+    if r < P_LATEST or pool_size == 1:
+        return pool_size - 1
+    if r < P_LATEST + P_ANCHOR or pool_size == 2:
+        return 0
+    return random.randrange(1, pool_size - 1)
+
+
+def evaluate_vs_ref(agent, ref_actor, eval_envs, episodes=EVAL_EPISODES):
+    """Deterministic (argmax) games vs the fixed reference. Returns metrics."""
+    obs = np.array([e.reset() for e in eval_envs], dtype=np.float32)
+    wins = losses = timeouts = 0
+    decisions = 0
+    while wins + losses + timeouts < episodes and decisions < 60_000:
+        actions = agent.actor.act_batch(obs)
+        bots = ref_actor.act_batch(invert_batch(obs))
+        decisions += len(eval_envs)
+        for k, env in enumerate(eval_envs):
+            done = False
+            for _ in range(FRAME_SKIP):
+                o, r1, r2, done = env.step([bots[k], actions[k]])
+                if done:
+                    break
+            if done:
+                if r2 == 1 and r1 == -1:
+                    wins += 1
+                elif r1 == 1 and r2 == -1:
+                    losses += 1
+                else:
+                    timeouts += 1
+                obs[k] = env.get_state()
+            else:
+                obs[k] = o
+    total = max(1, wins + losses + timeouts)
+    return {
+        "winrate": wins / total,
+        "score": (wins - losses) / total,
+        "timeout_frac": timeouts / total,
+    }
 
 
 if __name__ == "__main__":
@@ -133,22 +205,34 @@ if __name__ == "__main__":
         device=device,
     )
 
-    # frozen opponent: replaced with a copy of the agent on each promotion
-    agent1 = Agent(n_actions=num_actions, input_dims=(state_size,), device=device)
-
     if checkpoint:
         agent.load_checkpoint_state(checkpoint["agent"])
-        agent1.actor.load_state_dict(checkpoint["opponent_actor"])
     elif args.init_weights:
         actor_file = os.path.join(args.init_weights, f"actor_torch_ppo_{replica_id}")
         critic_file = os.path.join(args.init_weights, f"critic_torch_ppo_{replica_id}")
         agent.actor.load_state_dict(torch.load(actor_file, map_location=device))
         agent.critic.load_state_dict(torch.load(critic_file, map_location=device))
-        agent1.actor.load_state_dict(agent.actor.state_dict())
         print(f"initialized weights from {args.init_weights}")
-    else:
-        agent1.actor.load_state_dict(agent.actor.state_dict())
-    agent1.actor.eval()
+
+    # ---- opponent pool ----
+    pool_dir = os.path.join(run_dir, "pool")
+    os.makedirs(pool_dir, exist_ok=True)
+    anchor_path = os.path.join(pool_dir, "pool_000.pt")
+    if not os.path.exists(anchor_path):
+        # anchor = the run's origin (for old-format resumes: last opponent)
+        seed_state = (
+            checkpoint["opponent_actor"] if checkpoint else agent.actor.state_dict()
+        )
+        torch.save(seed_state, anchor_path)
+    pool = load_pool(pool_dir, num_actions, state_size, device)
+    print(f"opponent pool: {len(pool)} member(s)")
+
+    eval_ref = None
+    eval_envs = []
+    if args.eval_ref and os.path.exists(args.eval_ref):
+        eval_ref = load_policy(args.eval_ref, num_actions, (state_size,), device)
+        eval_envs = [make("Pong-v0") for _ in range(EVAL_ENVS)]
+        print(f"eval reference: {args.eval_ref}")
 
     train_state = checkpoint["train_state"] if checkpoint else {}
     n_steps = train_state.get("n_steps", 0)
@@ -182,6 +266,7 @@ if __name__ == "__main__":
     writer = SummaryWriter(log_dir=run_dir)
 
     observations = np.array([env.reset() for env in envs], dtype=np.float32)
+    env_opp = np.array([sample_opponent(len(pool)) for _ in range(num_envs)])
     ep_scores = np.zeros(num_envs)
     ep_lengths = np.zeros(num_envs, dtype=int)
     recent_lengths = deque(maxlen=500)
@@ -198,7 +283,11 @@ if __name__ == "__main__":
 
         for t in range(rollout_steps):
             actions, log_probs, values = agent.choose_action_batch(observations)
-            bot_actions = agent1.actor.act_batch(invert_batch(observations))
+            inverted = invert_batch(observations)
+            bot_actions = np.full(num_envs, 2, dtype=np.int64)
+            for idx in set(env_opp.tolist()):
+                mask = env_opp == idx
+                bot_actions[mask] = pool[idx].act_batch(inverted[mask])
 
             states_buf[t] = observations
             actions_buf[t] = actions
@@ -223,8 +312,9 @@ if __name__ == "__main__":
                     episodes_since_promotion += 1
                     ep_scores[k] = 0.0
                     ep_lengths[k] = 0
-                    # env auto-resets inside step(); fetch the fresh state
+                    # env auto-resets inside step(); fresh state, fresh opponent
                     observations[k] = env.get_state()
+                    env_opp[k] = sample_opponent(len(pool))
                 else:
                     observations[k] = obs_
             n_steps += num_envs
@@ -259,7 +349,17 @@ if __name__ == "__main__":
             writer.add_scalar("episode/length", float(np.mean(recent_lengths)), n_steps)
         writer.add_scalar("episode/count", episodes_done, n_steps)
         writer.add_scalar("selfplay/promotions", promotions, n_steps)
+        writer.add_scalar("selfplay/pool_size", len(pool), n_steps)
         writer.add_scalar("perf/steps_per_sec", steps_per_sec, n_steps)
+
+        if eval_ref is not None and (update + 1) % EVAL_INTERVAL == 0:
+            results = evaluate_vs_ref(agent, eval_ref, eval_envs)
+            for key, value in results.items():
+                writer.add_scalar(f"eval/vs_ref_{key}", value, n_steps)
+            print(
+                f"\neval vs ref @ {n_steps:,}: winrate {results['winrate']:.2f} "
+                f"score {results['score']:+.2f} timeouts {results['timeout_frac']:.2f}"
+            )
 
         if (update + 1) % 25 == 0:
             avg_score_data = {
@@ -276,15 +376,16 @@ if __name__ == "__main__":
         )
         if promoted:
             promotions += 1
-            print(f"\npromotion {promotions}: saving models, updating opponent")
+            print(f"\npromotion {promotions}: champion joins the pool")
             agent.save_models()  # champion export for play.py / tournament.py
-            agent1.actor.load_state_dict(agent.actor.state_dict())
-            agent1.actor.eval()
+            champ_path = os.path.join(pool_dir, f"pool_{promotions:03d}.pt")
+            torch.save(agent.actor.state_dict(), champ_path)
+            pool = load_pool(pool_dir, num_actions, state_size, device)
             score_history.extend([-1.0] * 100)
             episodes_since_promotion = 0
 
         if promoted or (update + 1) % CHECKPOINT_INTERVAL == 0:
-            save_checkpoint(run_dir, agent, agent1, snapshot_train_state(update))
+            save_checkpoint(run_dir, agent, pool[-1], snapshot_train_state(update))
 
         print(
             "update",
