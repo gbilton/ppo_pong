@@ -9,6 +9,15 @@ import math
 import numpy as np
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+import sys
+
+# headless servers (e.g. training over SSH) have no display; use pygame's dummy driver
+if (
+    sys.platform.startswith("linux")
+    and not os.getenv("DISPLAY")
+    and not os.getenv("WAYLAND_DISPLAY")
+):
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 import pygame
 from collections import namedtuple
 import random
