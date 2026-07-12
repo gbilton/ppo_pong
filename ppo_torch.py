@@ -155,6 +155,30 @@ class CriticNetwork(nn.Module):
         self.load_state_dict(torch.load(self.checkpoint_file, map_location=self.device))
 
 
+def load_policy(path, n_actions, input_dims, device=torch.device("cpu")):
+    """Load a trained actor for inference.
+
+    Accepts a raw actor state_dict file, a run checkpoint.pt (as written by
+    main_vec.py), or a directory containing an actor checkpoint.
+    """
+    if os.path.isdir(path):
+        candidates = sorted(
+            f
+            for f in os.listdir(path)
+            if f.startswith(("actor", "new_actor")) or f == "checkpoint.pt"
+        )
+        if not candidates:
+            raise FileNotFoundError(f"no actor checkpoint found in {path}")
+        path = os.path.join(path, candidates[0])
+    payload = torch.load(path, map_location=device)
+    if isinstance(payload, dict) and "agent" in payload:
+        payload = payload["agent"]["actor"]
+    actor = ActorNetwork(n_actions, input_dims, alpha=1e-4, device=device)
+    actor.load_state_dict(payload)
+    actor.eval()
+    return actor
+
+
 class Agent:
     def __init__(
         self,

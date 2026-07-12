@@ -1,52 +1,77 @@
-import os
+import argparse
 
-from ppo_torch import Agent
-from pong import *
+import numpy as np
+import torch
+
+from ppo_torch import load_policy
+from pong import make, Tools, pygame
+
+FRAME_SKIP = 4  # match training: the agent picks an action every 4th frame
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Play Pong against a trained agent (arrow keys, right paddle)"
+    )
+    parser.add_argument(
+        "--model",
+        default="tmp/docker/models/actor_torch_ppo_0",
+        help="agent checkpoint: actor file, run checkpoint.pt, or model dir "
+        "(default: current champion)",
+    )
+    parser.add_argument(
+        "--opponent",
+        default=None,
+        metavar="MODEL",
+        help="instead of playing yourself, watch MODEL play on the right side",
+    )
+    parser.add_argument(
+        "--points", type=int, default=None, help="end the game at this many points"
+    )
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
+    args = parse_args()
+    device = torch.device("cpu")
     env = make("Pong-v0")
 
-    device = torch.device("cpu")
-
-    p = DQN(device=device)
-    p.load_state_dict(torch.load("tmp/dqn/model100x3.pth", map_location=device))
-    p.eval()
-
-    # agent_name = "actor_torch_ppo_1"
-    agent_name = "actor_goat"
-    agent = Agent(
-        n_actions=env.num_actions, input_dims=(env.state_size,), device=device
+    agent_actor = load_policy(
+        args.model, env.num_actions, (env.state_size,), device=device
     )
-    agent.actor.checkpoint_file = os.path.join("./tmp/docker/legacy_models", agent_name)
-    agent.actor.load_checkpoint()
-    agent.actor.eval()
+    opponent_actor = None
+    if args.opponent:
+        opponent_actor = load_policy(
+            args.opponent, env.num_actions, (env.state_size,), device=device
+        )
 
-    bot_name = "actor_goat"
-    bot = Agent(n_actions=env.num_actions, input_dims=(env.state_size,), device=device)
-    bot.actor.checkpoint_file = os.path.join("./tmp/docker/legacy_models", bot_name)
-    bot.actor.load_checkpoint()
-    bot.actor.eval()
-
-    score = np.array([0, 0])
+    score = np.array([0, 0])  # [human/right, agent/left]
     observation = env.reset()
+    agent_action = 2
+    opponent_action = 2
+    frame = 0
+
     while True:
         env.render()
-        keys = pygame.key.get_pressed()
-        env.player1.key_movement(keys)
-        # env.player2.key_movement(keys)
-        action2 = agent.actor.act(observation)
+        if opponent_actor is None:
+            keys = pygame.key.get_pressed()
+            env.player1.key_movement(keys)
 
-        inverted_observation = Tools.invert(observation)
-        # action1 = p.act(inverted_observation)
-        # action1 = bot.actor.act(inverted_observation)
-        action1 = 2
+        if frame % FRAME_SKIP == 0:
+            agent_action = agent_actor.act(observation)
+            if opponent_actor is not None:
+                opponent_action = opponent_actor.act(Tools.invert(observation))
+        frame += 1
 
-        actions = [action1, action2]
-        observation, r1, r2, done = env.step(actions)
+        observation, r1, r2, done = env.step([opponent_action, agent_action])
 
         if done:
-            if r1 == -1 and r2 == 1:
-                score += np.array([1, 0])
             if r1 == 1 and r2 == -1:
+                score += np.array([1, 0])
+            elif r1 == -1 and r2 == 1:
                 score += np.array([0, 1])
-            print(f"score = {score}", end="\r")
+            print(f"you {score[0]} x {score[1]} agent", end="\r")
+            if args.points and score.max() >= args.points:
+                winner = "you win!" if score[0] > score[1] else "agent wins"
+                print(f"\nfinal: you {score[0]} x {score[1]} agent - {winner}")
+                break
