@@ -191,8 +191,9 @@ class Agent:
         policy_clip=0.2,
         batch_size=64,
         n_epochs=10,
-        entropy_coef=0.01,
+        entropy_coef=0.03,
         max_grad_norm=0.5,
+        target_kl=0.05,
         device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     ):
         self.gamma = gamma
@@ -201,6 +202,7 @@ class Agent:
         self.gae_lambda = gae_lambda
         self.entropy_coef = entropy_coef
         self.max_grad_norm = max_grad_norm
+        self.target_kl = target_kl
 
         self.batch_size = batch_size
         self.actor = ActorNetwork(n_actions, input_dims, alpha, device)
@@ -355,9 +357,17 @@ class Agent:
         return metrics
 
     def update(self, state_arr, action_arr, old_prob_arr, values, advantage):
-        advantage = torch.tensor(advantage, dtype=torch.float32).to(self.actor.device)
-
-        values = torch.tensor(values, dtype=torch.float32).to(self.actor.device)
+        device = self.actor.device
+        advantage = torch.tensor(advantage, dtype=torch.float32).to(device)
+        values = torch.tensor(values, dtype=torch.float32).to(device)
+        # convert the rollout once; minibatches below index these tensors
+        states_all = torch.tensor(
+            np.asarray(state_arr), dtype=torch.float32
+        ).to(device)
+        actions_all = torch.tensor(np.asarray(action_arr)).to(device)
+        old_probs_all = torch.tensor(
+            np.asarray(old_prob_arr), dtype=torch.float32
+        ).to(device)
 
         # explained variance of the rollout value predictions, before this update
         returns_all = advantage + values
@@ -374,22 +384,23 @@ class Agent:
         grad_norms_critic = []
 
         n_samples = len(state_arr)
+        epochs_used = 0
+        stop = False
         for _ in range(self.n_epochs):
+            if stop:
+                break
+            epochs_used += 1
             indices = np.arange(n_samples, dtype=np.int64)
             np.random.shuffle(indices)
             batches = [
-                indices[i : i + self.batch_size]
+                torch.as_tensor(indices[i : i + self.batch_size], device=device)
                 for i in range(0, n_samples, self.batch_size)
             ]
 
             for batch in batches:
-                states = torch.tensor(state_arr[batch], dtype=torch.float).to(
-                    self.actor.device
-                )
-                old_probs = torch.tensor(old_prob_arr[batch], dtype=torch.float32).to(
-                    self.actor.device
-                )
-                actions = torch.tensor(action_arr[batch]).to(self.actor.device)
+                states = states_all[batch]
+                old_probs = old_probs_all[batch]
+                actions = actions_all[batch]
 
                 dist = self.actor(states)
                 critic_value = self.critic(states)
@@ -450,7 +461,12 @@ class Agent:
                 grad_norms_actor.append(grad_norm_actor.item())
                 grad_norms_critic.append(grad_norm_critic.item())
 
+                if self.target_kl is not None and approx_kl > self.target_kl:
+                    stop = True  # policy moved too far; skip remaining epochs
+                    break
+
         return {
+            "epochs_used": float(epochs_used),
             "actor_loss": float(np.mean(actor_losses)),
             "critic_loss": float(np.mean(critic_losses)),
             "entropy": float(np.mean(entropies)),
