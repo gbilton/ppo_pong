@@ -156,8 +156,6 @@ class Ball:
             if x == 5:
                 self.bounce_x_increase(maxvel)
                 self.vely = self.vely + 5
-            # spin is useful, unbounded spin makes trajectories degenerate
-            self.vely = max(-15, min(15, self.vely))
 
         if self.groundcollision(screen_height):
             self.vely = (self.vely) * -1
@@ -255,10 +253,8 @@ class Pong_env:
         # self.screen_width = 800
         self.screen_height = 500
         self.run = True
-        # ball speed cap: the built-in +1-per-hit acceleration climbs to this.
-        # past ~16 px/frame a perfectly positioned defender (speed 5, 680 px
-        # crossing) physically cannot cover the court, so rallies must end.
-        self.maxvel = 22
+        # self.maxvel = 15.5 # speed of the ball to be faster than the player
+        self.maxvel = 10
         self.player_speed = 5
         self.height = 56
         self.width = 10
@@ -268,7 +264,7 @@ class Pong_env:
         self.player2_y = self.screen_height / 2 - self.height / 2
         self.r = [-3, -2, -1, 1, 2, 3]
         self.timestep = 0
-        self.max_timestep = 6000
+        self.max_timestep = 3000
         # self.r = [-3, -2, -1]
         self.ball_speed_x = 2 * random.choice(self.r)
         self.ball_speed_y = 2 * random.choice(self.r)

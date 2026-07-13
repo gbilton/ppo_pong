@@ -1,5 +1,12 @@
 # ppo_pong — PPO self-play Pong
 
+**THE ENVIRONMENT IS SACRED (owner's rule, 2026-07-13): never change the
+gameplay of pong.py** — physics, speeds, caps, timeouts, rewards, court.
+The original game is: maxvel=10, max_timestep=3000, unbounded paddle spin.
+Consequences to accept, not "fix": near-perfect defense is possible, long
+rallies stalemate at the 3000-frame timeout with -1 for both players.
+Non-gameplay changes (headless SDL, imports) are fine.
+
 Custom pygame Pong env + PPO (actor/critic MLPs, 7-dim state, 3 actions).
 Training is **CPU-only by design** — the nets are tiny, so per-call GPU
 overhead loses to CPU ~3x. More CPU cores = more steps/sec.
@@ -10,9 +17,9 @@ overhead loses to CPU ~3x. More CPU cores = more steps/sec.
   TensorBoard, fixed-reference evals. (`main.py` is the legacy single-env one.)
 - `ppo_torch.py` — Agent/networks; KL early-stop; entropy auto-controller
   (targets 0.65, adjusts entropy_coef each update, persisted in checkpoints).
-- `pong.py` — env. Physics: ball accelerates +1 velx per paddle hit up to
-  `maxvel=22` (past ~16 px/frame no defender can cover the court, so every
-  rally decides); paddle-hit spin capped at |vely|<=15.
+- `pong.py` — env (ORIGINAL, see rule above). Ball accelerates +1 velx per
+  paddle hit up to maxvel=10 (top speed ~11 — below the ~16 defense-breaking
+  threshold, so perfect defense is possible and stalemates are inherent).
 - `perfect_bot.py` — scripted geometry defender. Concedes only to objectively
   hard shots => used as a pure-offense grader (eval) and as 15% of training
   opponents. Also a benchmark: `perfect_bot.py --model <ckpt>`.
