@@ -9,6 +9,9 @@ runs/*
 !runs/latest
 !runs/ppo_vec_accel
 !runs/ppo_vec_accel/**
+# TB event files grow unbounded and would hit GitHub's 100MB limit;
+# full TB history is archived on the Mac by snapshot_push.sh
+runs/ppo_vec_accel/events.out.tfevents.*
 tmp/docker/json_files/
 recordings/
 *.log
