@@ -14,7 +14,7 @@ rsync -a "$HOST:~/src/ppo_pong/tmp/docker/models" \
          "$HOST:~/src/ppo_pong/tmp/docker/goat_v2_seed" tmp/docker/
 
 echo ">> committing snapshot"
-git add runs/latest runs/ppo_vec_accel tmp/docker/models \
+git add runs/latest runs/ppo_vec_accel runs/ppo_vec_original tmp/docker/models \
         tmp/docker/legacy_models tmp/docker/goat_seed tmp/docker/goat_v2_seed
 git commit -m "training-state snapshot $(date +%Y-%m-%d_%H:%M)" || echo "(no changes)"
 git push

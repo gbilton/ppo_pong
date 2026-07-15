@@ -53,9 +53,11 @@ matches the tmux server kills every session (this has happened).
   then latest champion / anchor (run origin) / random past champion at
   0.5/0.25/0.25. Latest-only self-play provably cycled (10 promotions that
   lost to their own seed). The anchor is never evicted.
-- **Promotion gate**: mean score over last 300 non-bot episodes >= 0.4, with
-  >= 2000 non-bot episodes between promotions (spacing keeps pool members
-  distinct). Promotions export to `tmp/docker/models/` and `runs/<run>/pool/`.
+- **Promotion gate**: winrate >= 0.6 over the last 300 DECIDED rallies
+  (someone scored; timeouts don't count - they are inherent to the original
+  physics and would cap any average-score gate) vs learned opponents, with
+  >= 2000 non-bot episodes between promotions. Promotions export to
+  `tmp/docker/models/` and `runs/<run>/pool/`.
 - **Gate != audit.** The honest strength metrics, every 200 updates:
   `eval/vs_<refname>_*` (deterministic games vs the fixed --eval-ref model,
   default actor_goat) and `eval/vs_geometry_bot_*` (offense quality).

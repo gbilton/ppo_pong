@@ -17,8 +17,13 @@ from ppo_torch import Agent, load_policy
 from pong import make
 
 FRAME_SKIP = 4
-SCORE_THRESHOLD = 0.4
-SCORE_WINDOW = 300  # episodes averaged for the promotion gate (fresh policy)
+SCORE_WINDOW = 300  # episodes averaged for episode/avg_score_100 (display only)
+# promotion gate: winrate over DECIDED rallies (someone scored) vs learned
+# opponents. Timeout stalemates are inherent to the original physics and
+# would cap any average-score gate; skill is "when a point happens, is it
+# yours?" - so that is what gets gated.
+DECIDED_WINDOW = 300
+DECIDED_WIN_THRESHOLD = 0.6
 MIN_EPISODES_BETWEEN_PROMOTIONS = 2000  # spacing keeps pool members distinct
 TRANSITIONS_PER_UPDATE = 4096
 CHECKPOINT_INTERVAL = 50  # updates between periodic checkpoints
@@ -256,6 +261,9 @@ if __name__ == "__main__":
     score_history = deque(
         train_state.get("score_history", [-1.0] * SCORE_WINDOW), maxlen=SCORE_WINDOW
     )
+    decided_history = deque(
+        train_state.get("decided_history", []), maxlen=DECIDED_WINDOW
+    )
     avg_scores = train_state.get("avg_scores", [])
 
     def snapshot_train_state(update):
@@ -266,6 +274,7 @@ if __name__ == "__main__":
             "episodes_done": episodes_done,
             "episodes_since_promotion": episodes_since_promotion,
             "score_history": list(score_history),
+            "decided_history": list(decided_history),
             "avg_scores": avg_scores,
             "num_envs": num_envs,
         }
@@ -313,8 +322,11 @@ if __name__ == "__main__":
             for k, env in enumerate(envs):
                 done = False
                 reward = 0
+                r_opp = 0
                 for _ in range(FRAME_SKIP):
-                    obs_, _, reward, done = env.step([bot_actions[k], actions[k]])
+                    obs_, r_opp, reward, done = env.step(
+                        [bot_actions[k], actions[k]]
+                    )
                     if done:
                         break
                 rewards_buf[t, k] = reward
@@ -327,6 +339,11 @@ if __name__ == "__main__":
                     if env_opp[k] != BOT_IDX:
                         score_history.append(ep_scores[k])
                         episodes_since_promotion += 1
+                        # decided rallies only: win 1, loss 0, timeout skipped
+                        if reward == 1 and r_opp == -1:
+                            decided_history.append(1.0)
+                        elif reward == -1 and r_opp == 1:
+                            decided_history.append(0.0)
                     recent_lengths.append(ep_lengths[k])
                     episodes_done += 1
                     ep_scores[k] = 0.0
@@ -364,6 +381,10 @@ if __name__ == "__main__":
         for key, value in metrics.items():
             writer.add_scalar(f"train/{key}", value, n_steps)
         writer.add_scalar("episode/avg_score_100", avg_score, n_steps)
+        decided_winrate = (
+            float(np.mean(decided_history)) if decided_history else 0.0
+        )
+        writer.add_scalar("episode/decided_winrate", decided_winrate, n_steps)
         if recent_lengths:
             writer.add_scalar("episode/length", float(np.mean(recent_lengths)), n_steps)
         writer.add_scalar("episode/count", episodes_done, n_steps)
@@ -402,17 +423,22 @@ if __name__ == "__main__":
                 json.dump(avg_score_data, json_file)
 
         promoted = (
-            avg_score >= SCORE_THRESHOLD
+            len(decided_history) == DECIDED_WINDOW
+            and decided_winrate >= DECIDED_WIN_THRESHOLD
             and episodes_since_promotion >= MIN_EPISODES_BETWEEN_PROMOTIONS
         )
         if promoted:
             promotions += 1
-            print(f"\npromotion {promotions}: champion joins the pool")
+            print(
+                f"\npromotion {promotions}: champion joins the pool "
+                f"(decided winrate {decided_winrate:.2f})"
+            )
             agent.save_models()  # champion export for play.py / tournament.py
             champ_path = os.path.join(pool_dir, f"pool_{promotions:03d}.pt")
             torch.save(agent.actor.state_dict(), champ_path)
             pool = load_pool(pool_dir, num_actions, state_size, device)
             score_history.extend([-1.0] * SCORE_WINDOW)
+            decided_history.clear()
             episodes_since_promotion = 0
 
         if promoted or (update + 1) % CHECKPOINT_INTERVAL == 0:
@@ -428,5 +454,6 @@ if __name__ == "__main__":
             "steps/s %d" % steps_per_sec,
             "promotions",
             promotions,
+            "decided %.2f" % decided_winrate,
             end="\r",
         )
