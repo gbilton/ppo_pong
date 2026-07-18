@@ -34,7 +34,9 @@ CHECKPOINT_INTERVAL = 50  # updates between periodic checkpoints
 # objectively hard shots, so its reward signal is pure offense quality.
 POOL_MAX = 20
 P_BOT = 0.15
-P_LATEST = 0.5  # of the non-bot share
+# latest-heavy sampling let champions farm each other; external members
+# (anchor + curriculum + older champs) now carry most of the gate's weight
+P_LATEST = 0.3  # of the non-bot share
 P_ANCHOR = 0.25
 BOT_IDX = -1
 
@@ -116,10 +118,15 @@ def save_checkpoint(run_dir, agent, latest_opponent, train_state):
 
 
 def load_pool(pool_dir, num_actions, state_size, device):
-    """Anchor (pool_000) plus the most recent POOL_MAX-1 champions."""
+    """Permanent members (pool_000*: anchor + curriculum) are NEVER trimmed;
+    champions beyond the budget drop oldest-first. Trimming permas once let
+    the pool collapse back into a self-referential lineage (17 hollow
+    promotions, tournament last place)."""
     files = sorted(glob.glob(os.path.join(pool_dir, "pool_*.pt")))
-    if len(files) > POOL_MAX:
-        files = [files[0]] + files[-(POOL_MAX - 1) :]
+    perma = [f for f in files if os.path.basename(f).startswith("pool_000")]
+    champs = [f for f in files if f not in perma]
+    budget = max(1, POOL_MAX - len(perma))
+    files = perma + champs[-budget:]
     return [
         load_policy(f, num_actions, (state_size,), device=device) for f in files
     ]
